@@ -1,0 +1,125 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: #f3f5f0;
+  --foreground: #1d1c16;
+  --card: #ffffff;
+  --card-foreground: #1d1c16;
+  --popover: #ffffff;
+  --popover-foreground: #1d1c16;
+  --primary: #3c5d42;
+  --primary-foreground: #f0f5f0;
+  --secondary: #e7ebe0;
+  --secondary-foreground: #1d1c16;
+  --muted: #e9e8e2;
+  --muted-foreground: #756e57;
+  --accent: #cfd6c2;
+  --accent-foreground: #1d1c16;
+  --destructive: #b91c1c;
+  --destructive-foreground: #fef2f2;
+  --border: #d4d0c4;
+  --input: #d4d0c4;
+  --ring: #507c58;
+  --chart-1: #3c5d42;
+  --chart-2: #869966;
+  --chart-3: #669980;
+  --chart-4: #a8a18a;
+  --chart-5: #9ead85;
+  --radius: 0.625rem;
+  --sidebar: #1b1f14;
+  --sidebar-foreground: #e7ebe0;
+  --sidebar-primary: #86ac86;
+  --sidebar-primary-foreground: #0f150e;
+  --sidebar-accent: #283e2c;
+  --sidebar-accent-foreground: #e7ebe0;
+  --sidebar-border: #363d29;
+  --sidebar-ring: #507c58;
+}
+
+.dark {
+  --background: #1d1c16;
+  --foreground: #e9e8e2;
+  --card: #1b1f14;
+  --card-foreground: #e9e8e2;
+  --popover: #1b1f14;
+  --popover-foreground: #e9e8e2;
+  --primary: #86ac86;
+  --primary-foreground: #0f150e;
+  --secondary: #363d29;
+  --secondary-foreground: #e7ebe0;
+  --muted: #363d29;
+  --muted-foreground: #a8a18a;
+  --accent: #283e2c;
+  --accent-foreground: #e7ebe0;
+  --destructive: #dc2626;
+  --destructive-foreground: #fef2f2;
+  --border: #363d29;
+  --input: #363d29;
+  --ring: #507c58;
+  --chart-1: #86ac86;
+  --chart-2: #9ead85;
+  --chart-3: #669980;
+  --chart-4: #beb9a7;
+  --chart-5: #b7c2a3;
+  --sidebar: #13150e;
+  --sidebar-foreground: #e7ebe0;
+  --sidebar-primary: #86ac86;
+  --sidebar-primary-foreground: #0f150e;
+  --sidebar-accent: #283e2c;
+  --sidebar-accent-foreground: #e7ebe0;
+  --sidebar-border: #1b1f14;
+  --sidebar-ring: #507c58;
+}
+
+@theme inline {
+  --font-sans: var(--font-dm-sans), 'DM Sans', sans-serif;
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
