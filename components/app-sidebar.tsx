@@ -5,12 +5,9 @@ import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
   Package,
-  FolderOpen,
   Truck,
-  AlertCircle,
   TrendingUp,
   BarChart3,
-  FileText,
   Users,
   Settings,
   ShoppingCart,
@@ -27,7 +24,6 @@ const navSections = [
       { name: "Dashboard", href: "/", icon: LayoutDashboard },
       { name: "Ventas", href: "/ventas", icon: ShoppingCart },
       { name: "Inventario", href: "/inventario", icon: Package },
-      { name: "Categorias", href: "/categorias", icon: FolderOpen },
       { name: "Proveedores", href: "/proveedores", icon: Truck },
       { name: "Clientes", href: "/clientes", icon: UserCheck },
     ],
@@ -35,10 +31,8 @@ const navSections = [
   {
     label: "Gestion",
     items: [
-      { name: "Stock Bajo", href: "/stock-bajo", icon: AlertCircle },
       { name: "Movimientos", href: "/movimientos", icon: TrendingUp },
       { name: "Reportes", href: "/reportes", icon: BarChart3 },
-      { name: "Facturas", href: "/facturas", icon: FileText },
       { name: "Finanzas", href: "/finanzas", icon: DollarSign },
     ],
   },

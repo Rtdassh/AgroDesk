@@ -1,0 +1,138 @@
+-- Creación de tablas base (sin dependencias de otras tablas)
+CREATE TABLE roles (
+    id_rol SERIAL PRIMARY KEY,
+    nombre VARCHAR(50) NOT NULL
+);
+
+CREATE TABLE categorias (
+    id_categoria SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    descripcion TEXT
+);
+
+CREATE TABLE clientes (
+    id_cliente SERIAL PRIMARY KEY,
+    nit VARCHAR(20) UNIQUE,
+    nombre VARCHAR(150) NOT NULL,
+    direccion VARCHAR(255),
+    telefono VARCHAR(20),
+    tipo_cliente VARCHAR(50)
+);
+
+CREATE TABLE proveedores (
+    id_proveedor SERIAL PRIMARY KEY,
+    nit VARCHAR(20) UNIQUE,
+    nombre VARCHAR(150) NOT NULL,
+    direccion VARCHAR(255),
+    telefono VARCHAR(20),
+    contacto VARCHAR(150)
+);
+
+-- Creación de tablas con dependencias (Catálogos y Usuarios)
+CREATE TABLE usuarios (
+    id_usuario SERIAL PRIMARY KEY,
+    nombre VARCHAR(150) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    id_rol INT REFERENCES roles(id_rol)
+);
+
+CREATE TABLE productos (
+    id_producto SERIAL PRIMARY KEY,
+    codigo VARCHAR(50) UNIQUE NOT NULL,
+    nombre VARCHAR(150) NOT NULL,
+    id_categoria INT REFERENCES categorias(id_categoria),
+    precio_compra DECIMAL(10,2) NOT NULL,
+    precio_venta DECIMAL(10,2) NOT NULL,
+    stock_minimo INT DEFAULT 0
+);
+
+-- Gestión de Inventario (Lotes para control de vencimiento)
+CREATE TABLE lotes (
+    id_lote SERIAL PRIMARY KEY,
+    id_producto INT REFERENCES productos(id_producto),
+    numero_lote VARCHAR(50) NOT NULL,
+    fecha_vencimiento DATE,
+    stock_actual INT DEFAULT 0
+);
+
+-- Tablas transaccionales (Ventas)
+CREATE TABLE ventas (
+    id_venta SERIAL PRIMARY KEY,
+    id_cliente INT REFERENCES clientes(id_cliente),
+    id_usuario INT REFERENCES usuarios(id_usuario),
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    total DECIMAL(10,2) NOT NULL,
+    estado VARCHAR(20) DEFAULT 'Completada'
+);
+
+CREATE TABLE detalle_ventas (
+    id_detalle_venta SERIAL PRIMARY KEY,
+    id_venta INT REFERENCES ventas(id_venta) ON DELETE CASCADE,
+    id_producto INT REFERENCES productos(id_producto),
+    cantidad INT NOT NULL,
+    precio_unitario DECIMAL(10,2) NOT NULL,
+    subtotal DECIMAL(10,2) NOT NULL
+);
+
+-- Tablas transaccionales (Compras)
+CREATE TABLE compras (
+    id_compra SERIAL PRIMARY KEY,
+    id_proveedor INT REFERENCES proveedores(id_proveedor),
+    id_usuario INT REFERENCES usuarios(id_usuario),
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    numero_factura VARCHAR(50),
+    total DECIMAL(10,2) NOT NULL
+);
+
+CREATE TABLE detalle_compras (
+    id_detalle_compra SERIAL PRIMARY KEY,
+    id_compra INT REFERENCES compras(id_compra) ON DELETE CASCADE,
+    id_producto INT REFERENCES productos(id_producto),
+    cantidad INT NOT NULL,
+    precio_unitario DECIMAL(10,2) NOT NULL,
+    subtotal DECIMAL(10,2) NOT NULL
+);
+
+-- Gestión de Alertas (Inventario y Vencimientos)
+CREATE TABLE alertas (
+    id_alerta SERIAL PRIMARY KEY,
+    id_producto INT REFERENCES productos(id_producto),
+    tipo_alerta VARCHAR(50) NOT NULL, -- Ej. 'Stock Mínimo', 'Próximo a Vencer'
+    descripcion TEXT NOT NULL,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    estado VARCHAR(20) DEFAULT 'Activa' -- 'Activa', 'Resuelta'
+);
+
+-- Control Financiero: Cierres de caja
+CREATE TABLE cierres_caja (
+    id_cierre SERIAL PRIMARY KEY,
+    id_usuario INT REFERENCES usuarios(id_usuario),
+    fecha_cierre TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    total_ventas DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    total_egresos DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    utilidad_bruta DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    saldo_final DECIMAL(10,2) NOT NULL,
+    observaciones TEXT
+);
+
+-- Control Financiero: Pagos a proveedores (Egresos)
+CREATE TABLE pagos_proveedores (
+    id_pago SERIAL PRIMARY KEY,
+    id_compra INT REFERENCES compras(id_compra),
+    id_usuario INT REFERENCES usuarios(id_usuario),
+    fecha_pago TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    monto_pagado DECIMAL(10,2) NOT NULL,
+    metodo_pago VARCHAR(50) NOT NULL,
+    referencia VARCHAR(100)
+);
+
+-- Emisión de Comprobantes (Asociados a la venta)
+CREATE TABLE comprobantes (
+    id_comprobante SERIAL PRIMARY KEY,
+    id_venta INT REFERENCES ventas(id_venta) ON DELETE CASCADE,
+    tipo_comprobante VARCHAR(50) NOT NULL, -- Ej. 'Factura', 'Ticket'
+    serie VARCHAR(10),
+    correlativo VARCHAR(50) NOT NULL UNIQUE,
+    fecha_emision TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
