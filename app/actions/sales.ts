@@ -1,10 +1,11 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 export async function getSales() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: ventas, error } = await supabase
     .from("ventas")
@@ -23,22 +24,22 @@ export async function getSales() {
   }
 
   // Format sales for the UI
-  return ventas.map(venta => ({
+  return ventas.map((venta: any) => ({
     id: `V-${venta.id_venta.toString().padStart(4, "0")}`,
     date: new Date(venta.fecha).toISOString().split("T")[0],
     client: venta.clientes?.nombre || "Consumidor Final",
     nit: venta.clientes?.nit || "C/F",
-    items: 1, // To be calculated from detalle_ventas if needed, using 1 as placeholder for list view performance
+    items: 1,
     subtotal: venta.total,
     discount: 0,
     total: venta.total,
-    payment: "Contado", // Mock or add to schema if necessary
-    status: venta.estado
+    payment: "Contado",
+    status: venta.estado,
   }));
 }
 
 export async function getClientesForSale() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.from("clientes").select("id_cliente, nombre, nit");
   
   if (error) {
@@ -49,7 +50,7 @@ export async function getClientesForSale() {
 }
 
 export async function getProductosForSale() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("productos")
     .select(`
@@ -87,7 +88,8 @@ export async function createSale(data: {
     subtotal: number;
   }[]
 }) {
-  const supabase = createClient();
+  const profile = await requireUser();
+  const supabase = await createClient();
 
   // For transaction-like behavior, we use an RPC if available.
   // Since we don't have custom RPCs defined in the schema, we'll do sequential operations.
@@ -101,7 +103,7 @@ export async function createSale(data: {
         id_cliente: data.id_cliente,
         total: data.total,
         estado: 'Completada',
-        // id_usuario: 1 // TODO: Get from auth session
+        id_usuario: profile.id_usuario,
       }])
       .select()
       .single();

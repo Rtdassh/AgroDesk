@@ -1,0 +1,174 @@
+"use client"
+
+import { useState } from "react"
+import { PageHeader } from "@/components/page-header"
+import { StatCard } from "@/components/stat-card"
+import { DataTable, type Column } from "@/components/data-table"
+import { RowActions } from "@/components/row-actions"
+import { Package, DollarSign, AlertTriangle, Search, Plus, FileDown, FileSpreadsheet, Pencil } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { addProduct, updateProduct, deleteProduct } from "@/app/actions/inventory"
+import { exportCSV } from "@/lib/export-csv"
+import { toast } from "sonner"
+import { useRouter } from "next/navigation"
+
+export function InventarioClient({ initialProducts }: { initialProducts: any[] }) {
+  const router = useRouter()
+  const [search, setSearch] = useState("")
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<any>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const products = initialProducts
+  const totalProducts = products.length
+  const totalValue = products.reduce((sum: number, p: any) => sum + p.total, 0)
+  const lowStock = products.filter((p: any) => p.status === "Critico" || p.status === "Bajo").length
+
+  const filteredProducts = products.filter((p: any) =>
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    p.code.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const handleOpenCreate = () => { setEditingProduct(null); setIsModalOpen(true) }
+  const handleOpenEdit = (product: any) => { setEditingProduct(product); setIsModalOpen(true) }
+
+  const handleDelete = async (id: number) => {
+    try {
+      const result = await deleteProduct(id)
+      if (result.success) { toast.success("Producto eliminado"); router.refresh() }
+      else toast.error(result.error || "Error al eliminar")
+    } catch { toast.error("Error inesperado") }
+  }
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    const formData = new FormData(e.currentTarget)
+    try {
+      const result = editingProduct
+        ? await updateProduct(editingProduct.no, formData)
+        : await addProduct(formData)
+      if (result.success) {
+        toast.success(`Producto ${editingProduct ? "actualizado" : "creado"} exitosamente`)
+        setIsModalOpen(false)
+        router.refresh()
+      } else {
+        toast.error(result.error || "Error al guardar")
+      }
+    } catch { toast.error("Error inesperado") }
+    finally { setIsSubmitting(false) }
+  }
+
+  const handleExportCSV = () => {
+    exportCSV("inventario", ["No", "Codigo", "Producto", "Proveedor", "Factura", "Cantidad", "Precio Compra", "Total", "Estado"],
+      filteredProducts.map((p: any) => [p.no, p.code, p.name, p.supplier, p.invoice, p.qty, p.price, p.total, p.status]))
+  }
+
+  const columns: Column<any>[] = [
+    { key: "no", header: "No.", render: (r) => r.no },
+    { key: "code", header: "Codigo", render: (r) => <span className="font-medium">{r.code}</span> },
+    { key: "name", header: "Producto", render: (r) => (
+      <div>
+        <p className="font-semibold">{r.name}</p>
+        <p className="text-xs text-muted-foreground">{r.desc}</p>
+      </div>
+    )},
+    { key: "supplier", header: "Proveedor", render: (r) => <span className="text-muted-foreground">{r.supplier}</span> },
+    { key: "invoice", header: "No. Factura", render: (r) => r.invoice },
+    { key: "qty", header: "Cantidad", render: (r) => r.qty },
+    { key: "price", header: "Precio Compra (Q)", render: (r) => `Q${Number(r.price).toFixed(2)}` },
+    { key: "total", header: "Total (Q)", render: (r) => <span className="font-medium">Q{Number(r.total).toFixed(2)}</span> },
+    { key: "status", header: "Estado", render: (r) => (
+      <Badge variant={r.status === "Critico" ? "destructive" : r.status === "Bajo" ? "secondary" : "outline"}>{r.status}</Badge>
+    )},
+    { key: "actions", header: "", render: (r) => (
+      <RowActions
+        actions={[{ label: "Editar", icon: Pencil, onClick: () => handleOpenEdit(r) }]}
+        deleteConfig={{ title: "Eliminar producto", description: "Esta accion no se puede deshacer. El producto sera eliminado permanentemente.", onConfirm: () => handleDelete(r.no) }}
+      />
+    )},
+  ]
+
+  return (
+    <>
+      <PageHeader icon={Package} title="Gestion de Inventario" />
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <StatCard title="Total Productos" value={totalProducts.toString()} icon={Package} />
+        <StatCard title="Valor Total" value={`Q${totalValue.toLocaleString("en", { minimumFractionDigits: 2 })}`} icon={DollarSign} />
+        <StatCard title="Stock Bajo" value={lowStock.toString()} icon={AlertTriangle} />
+      </div>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Productos en Inventario</CardTitle>
+          <CardDescription>Gestiona tu inventario de productos</CardDescription>
+          <CardAction>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleExportCSV}>
+                <FileDown className="mr-2 h-4 w-4" />
+                Exportar CSV
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleExportCSV}>
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                Exportar Excel
+              </Button>
+              <Button size="sm" onClick={handleOpenCreate}>
+                <Plus className="mr-2 h-4 w-4" />
+                Agregar Producto
+              </Button>
+            </div>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4 relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input placeholder="Buscar productos..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <DataTable columns={columns} data={filteredProducts} rowKey={(r) => r.no} emptyIcon={Package} emptyMessage="No se encontraron productos." />
+        </CardContent>
+      </Card>
+
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingProduct ? "Editar Producto" : "Nuevo Producto"}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="codigo">Codigo</Label>
+                <Input id="codigo" name="codigo" required defaultValue={editingProduct?.code || ""} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="nombre">Nombre del Producto</Label>
+                <Input id="nombre" name="nombre" required defaultValue={editingProduct?.name || ""} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="precio_compra">Precio de Compra</Label>
+                <Input id="precio_compra" name="precio_compra" type="number" step="0.01" required defaultValue={editingProduct?.price || ""} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="precio_venta">Precio de Venta</Label>
+                <Input id="precio_venta" name="precio_venta" type="number" step="0.01" required defaultValue={editingProduct?.precio_venta || ""} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stock_minimo">Stock Minimo</Label>
+                <Input id="stock_minimo" name="stock_minimo" type="number" required defaultValue={editingProduct?.stock_minimo || "0"} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+              <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Guardando..." : "Guardar"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}

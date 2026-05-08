@@ -1,10 +1,11 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 export async function getTransactions() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: ventas, error: errV } = await supabase
     .from("ventas")
@@ -32,7 +33,7 @@ export async function getTransactions() {
     return [];
   }
 
-  const transactions = [];
+  const transactions: any[] = [];
 
   if (ventas) {
     ventas.forEach((v: any) => {
@@ -73,7 +74,7 @@ export async function getTransactions() {
 }
 
 export async function getCashClosings() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: cierres, error } = await supabase
     .from("cierres_caja")
@@ -97,7 +98,8 @@ export async function getCashClosings() {
 }
 
 export async function closeDailyCash() {
-  const supabase = createClient();
+  const profile = await requireUser();
+  const supabase = await createClient();
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date();
@@ -139,7 +141,8 @@ export async function closeDailyCash() {
         total_egresos,
         utilidad_bruta,
         saldo_final,
-        observaciones: "Cierre diario automatizado"
+        observaciones: "Cierre diario automatizado",
+        id_usuario: profile.id_usuario,
       }
     ])
     .select();

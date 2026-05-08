@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 export async function getClients() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: clientes, error } = await supabase
     .from("clientes")
@@ -51,7 +51,7 @@ export async function getClients() {
 }
 
 export async function addClient(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   
   const nombre = formData.get("nombre") as string;
   const nit = formData.get("nit") as string;
@@ -82,7 +82,7 @@ export async function addClient(formData: FormData) {
 }
 
 export async function updateClient(id: number, formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   
   const nombre = formData.get("nombre") as string;
   const nit = formData.get("nit") as string;
@@ -112,7 +112,7 @@ export async function updateClient(id: number, formData: FormData) {
 }
 
 export async function deleteClient(id: number) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { error } = await supabase
     .from("clientes")

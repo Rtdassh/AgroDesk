@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 
 export async function getDashboardData() {
-  const supabase = createClient();
+  const supabase = await createClient();
   
   // Date calculations
   const todayStart = new Date();

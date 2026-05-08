@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 export async function getProducts() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: productos, error } = await supabase
     .from("productos")
@@ -50,7 +50,7 @@ export async function getProducts() {
 }
 
 export async function addProduct(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   
   const codigo = formData.get("codigo") as string;
   const nombre = formData.get("nombre") as string;
@@ -81,7 +81,7 @@ export async function addProduct(formData: FormData) {
 }
 
 export async function deleteProduct(id: number) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { error } = await supabase
     .from("productos")
@@ -98,7 +98,7 @@ export async function deleteProduct(id: number) {
 }
 
 export async function updateProduct(id: number, formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   
   const codigo = formData.get("codigo") as string;
   const nombre = formData.get("nombre") as string;

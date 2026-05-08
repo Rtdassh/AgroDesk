@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 export async function getSuppliers() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: proveedores, error } = await supabase
     .from("proveedores")
@@ -57,7 +57,7 @@ export async function getSuppliers() {
 }
 
 export async function addSupplier(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   
   const nombre = formData.get("nombre") as string;
   const nit = formData.get("nit") as string;
@@ -88,7 +88,7 @@ export async function addSupplier(formData: FormData) {
 }
 
 export async function updateSupplier(id: number, formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   
   const nombre = formData.get("nombre") as string;
   const nit = formData.get("nit") as string;
@@ -118,7 +118,7 @@ export async function updateSupplier(id: number, formData: FormData) {
 }
 
 export async function deleteSupplier(id: number) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { error } = await supabase
     .from("proveedores")
