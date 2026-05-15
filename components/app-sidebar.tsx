@@ -17,6 +17,7 @@ import {
   Leaf,
   LogOut,
   Menu,
+  Tags,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
@@ -45,7 +46,9 @@ const navSections: NavSection[] = [
     items: [
       { name: "Dashboard", href: "/", icon: LayoutDashboard },
       { name: "Ventas", href: "/ventas", icon: ShoppingCart },
+      { name: "Compras", href: "/compras", icon: Truck },
       { name: "Inventario", href: "/inventario", icon: Package },
+      { name: "Categorías", href: "/categorias", icon: Tags },
       { name: "Proveedores", href: "/proveedores", icon: Truck },
       { name: "Clientes", href: "/clientes", icon: UserCheck },
     ],

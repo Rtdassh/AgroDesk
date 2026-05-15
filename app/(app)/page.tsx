@@ -12,7 +12,7 @@ import { Empty, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { getDashboardData } from "@/app/actions/dashboard"
 import Link from "next/link"
 
-export const dynamic = "force-dynamic"
+
 
 export default async function DashboardPage() {
   const data = await getDashboardData()

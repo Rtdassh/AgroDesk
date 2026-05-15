@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { addProduct, updateProduct, deleteProduct } from "@/app/actions/inventory"
+import { addProduct, updateProduct, deleteProduct, adjustLoteStock } from "@/app/actions/inventory"
 import { exportCSV } from "@/lib/export-csv"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -23,6 +23,11 @@ export function InventarioClient({ initialProducts }: { initialProducts: any[] }
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<any>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Lotes state
+  const [isLotesModalOpen, setIsLotesModalOpen] = useState(false)
+  const [selectedProductLotes, setSelectedProductLotes] = useState<any>(null)
+  const [lotes, setLotes] = useState<any[]>([])
 
   const products = initialProducts
   const totalProducts = products.length
@@ -36,12 +41,29 @@ export function InventarioClient({ initialProducts }: { initialProducts: any[] }
 
   const handleOpenCreate = () => { setEditingProduct(null); setIsModalOpen(true) }
   const handleOpenEdit = (product: any) => { setEditingProduct(product); setIsModalOpen(true) }
+  const handleOpenLotes = (product: any) => { 
+    setSelectedProductLotes(product); 
+    setLotes(product.lotes || []); 
+    setIsLotesModalOpen(true); 
+  }
 
   const handleDelete = async (id: number) => {
     try {
       const result = await deleteProduct(id)
       if (result.success) { toast.success("Producto eliminado"); router.refresh() }
       else toast.error(result.error || "Error al eliminar")
+    } catch { toast.error("Error inesperado") }
+  }
+
+  const handleAdjustLote = async (id_lote: number, newStock: number) => {
+    try {
+      const result = await adjustLoteStock(id_lote, newStock)
+      if (result.success) {
+        toast.success("Stock actualizado")
+        router.refresh()
+      } else {
+        toast.error(result.error || "Error al actualizar stock")
+      }
     } catch { toast.error("Error inesperado") }
   }
 
@@ -88,7 +110,10 @@ export function InventarioClient({ initialProducts }: { initialProducts: any[] }
     )},
     { key: "actions", header: "", render: (r) => (
       <RowActions
-        actions={[{ label: "Editar", icon: Pencil, onClick: () => handleOpenEdit(r) }]}
+        actions={[
+          { label: "Ver Lotes / Ajustar", icon: Package, onClick: () => handleOpenLotes(r) },
+          { label: "Editar", icon: Pencil, onClick: () => handleOpenEdit(r) }
+        ]}
         deleteConfig={{ title: "Eliminar producto", description: "Esta accion no se puede deshacer. El producto sera eliminado permanentemente.", onConfirm: () => handleDelete(r.no) }}
       />
     )},
@@ -167,6 +192,63 @@ export function InventarioClient({ initialProducts }: { initialProducts: any[] }
               <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Guardando..." : "Guardar"}</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Lotes */}
+      <Dialog open={isLotesModalOpen} onOpenChange={setIsLotesModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Lotes del Producto: {selectedProductLotes?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {lotes.length === 0 ? (
+              <p className="text-center text-muted-foreground py-4">No hay lotes registrados para este producto.</p>
+            ) : (
+              <div className="rounded-md border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-medium">Lote</th>
+                      <th className="px-4 py-2 text-left font-medium">Vencimiento</th>
+                      <th className="px-4 py-2 text-left font-medium">Stock Actual</th>
+                      <th className="px-4 py-2 text-right font-medium">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lotes.map((lote: any, idx: number) => (
+                      <tr key={idx} className="border-t">
+                        <td className="px-4 py-3">{lote.numero_lote}</td>
+                        <td className="px-4 py-3">{lote.fecha_vencimiento || "N/A"}</td>
+                        <td className="px-4 py-3">
+                          <Input 
+                            type="number" 
+                            className="w-24"
+                            defaultValue={lote.stock_actual}
+                            onBlur={(e) => {
+                              const newVal = parseInt(e.target.value);
+                              if (!isNaN(newVal) && newVal !== lote.stock_actual) {
+                                handleAdjustLote(lote.id_lote, newVal);
+                                const newLotes = [...lotes];
+                                newLotes[idx].stock_actual = newVal;
+                                setLotes(newLotes);
+                              }
+                            }}
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="text-xs text-muted-foreground">Editar para guardar</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsLotesModalOpen(false)}>Cerrar</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

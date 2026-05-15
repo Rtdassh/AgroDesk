@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next'
 import { DM_Sans } from 'next/font/google'
-import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
@@ -15,6 +14,10 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: 'AgroDesk - Sistema de Inventario y Ventas',
   description: 'Sistema integral de ventas e inventario agricola',
+  icons: {
+    icon: '/icon.svg',
+    apple: '/apple-icon.png',
+  }
 }
 
 export const viewport: Viewport = {
@@ -33,7 +36,6 @@ export default function RootLayout({
           {children}
           <Toaster richColors position="top-right" />
         </ThemeProvider>
-        <Analytics />
       </body>
     </html>
   )

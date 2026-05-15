@@ -1,8 +1,10 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
+import { revalidateTag } from "next/cache"
+import { unstable_cache } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
-import { requireAdmin, requireUser } from "@/lib/auth"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { requireAdmin } from "@/lib/auth"
 
 export type CompanyConfig = {
   company: string
@@ -26,9 +28,8 @@ const DEFAULT_CONFIG: CompanyConfig = {
   currency: "GTQ",
 }
 
-export async function getConfig(): Promise<CompanyConfig> {
-  await requireUser()
-  const supabase = await createClient()
+const _getConfig = async (): Promise<CompanyConfig> => {
+  const supabase = createAdminClient()
   const { data, error } = await supabase
     .from("configuracion_empresa")
     .select("*")
@@ -48,6 +49,11 @@ export async function getConfig(): Promise<CompanyConfig> {
     currency: data.currency ?? "GTQ",
   }
 }
+
+export const getConfig = unstable_cache(_getConfig, ["get-config"], {
+  revalidate: 120,
+  tags: ["configuracion"],
+})
 
 export async function saveConfig(formData: FormData) {
   await requireAdmin()
@@ -77,6 +83,6 @@ export async function saveConfig(formData: FormData) {
     return { success: false, error: error.message }
   }
 
-  revalidatePath("/configuracion")
+  revalidateTag("configuracion", "default")
   return { success: true }
 }
