@@ -91,7 +91,8 @@ export const getProductosForSale = unstable_cache(
 
 // ─── Mutation ─────────────────────────────────────────────────────────────────
 export async function createSale(data: {
-  id_cliente: number;
+  id_cliente?: number | string;
+  nuevo_cliente?: { nombre: string; nit: string; telefono?: string; direccion?: string };
   total: number;
   detalles: {
     id_producto: number;
@@ -104,10 +105,35 @@ export async function createSale(data: {
   const supabase = await createClient();
 
   try {
+    let clientId = typeof data.id_cliente === "string" ? parseInt(data.id_cliente) : data.id_cliente;
+
+    if (!clientId && data.nuevo_cliente) {
+      if (!data.nuevo_cliente.nombre) throw new Error("El nombre del cliente es obligatorio");
+      
+      const { data: newClient, error: clientErr } = await supabase
+        .from("clientes")
+        .insert([{
+          nombre: data.nuevo_cliente.nombre,
+          nit: data.nuevo_cliente.nit || "C/F",
+          telefono: data.nuevo_cliente.telefono || null,
+          direccion: data.nuevo_cliente.direccion || null,
+        }])
+        .select("id_cliente")
+        .single();
+      
+      if (clientErr) throw new Error(`Error creando cliente: ${clientErr.message}`);
+      clientId = newClient.id_cliente;
+      
+      // Invalidate clients cache so it appears everywhere
+      revalidateTag("clientes", "default");
+    }
+
+    if (!clientId) throw new Error("Debe seleccionar un cliente o crear uno nuevo.");
+
     const { data: ventaData, error: ventaError } = await supabase
       .from("ventas")
       .insert([{
-        id_cliente: data.id_cliente,
+        id_cliente: clientId,
         total: data.total,
         estado: "Completada",
         id_usuario: profile.id_usuario,

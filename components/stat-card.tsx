@@ -10,14 +10,19 @@ interface StatCardProps {
 
 export function StatCard({ title, value, icon: Icon, subtitle, change }: StatCardProps) {
   return (
-    <div className="rounded-lg border border-border bg-card p-5">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-muted-foreground">{title}</p>
-        <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+    <div className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/50 dark:bg-black/20 backdrop-blur-md p-6 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden">
+      {/* Decorative subtle gradient blob */}
+      <div className="absolute -top-6 -right-6 w-32 h-32 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-colors duration-500 pointer-events-none" />
+
+      <div className="flex items-center justify-between relative z-10">
+        <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">{title}</p>
+        <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-transform">
+          <Icon className="h-5 w-5" aria-hidden="true" />
+        </div>
       </div>
-      <p className="mt-2 text-2xl font-bold text-foreground">{value}</p>
-      {subtitle && <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>}
-      {change && <p className="mt-0.5 text-xs text-muted-foreground">{change}</p>}
+      <p className="mt-4 text-3xl font-black text-foreground tracking-tight relative z-10">{value}</p>
+      {subtitle && <p className="mt-2 text-sm text-muted-foreground font-medium relative z-10">{subtitle}</p>}
+      {change && <p className="mt-1 text-xs text-muted-foreground relative z-10">{change}</p>}
     </div>
   )
 }

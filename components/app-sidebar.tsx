@@ -182,7 +182,7 @@ function SidebarContent({
 
 export function AppSidebar({ profile }: { profile: UserProfile }) {
   return (
-    <aside className="hidden md:flex h-screen w-64 flex-col border-r border-border bg-card">
+    <aside className="hidden md:flex h-screen w-[280px] flex-col border-none bg-transparent z-20">
       <SidebarContent profile={profile} />
     </aside>
   )

@@ -14,9 +14,12 @@ export async function createClient() {
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options as CookieOptions)
-            )
+            cookiesToSet.forEach(({ name, value, options }) => {
+              const sessionOptions = { ...options }
+              delete sessionOptions.maxAge
+              delete sessionOptions.expires
+              cookieStore.set(name, value, sessionOptions as CookieOptions)
+            })
           } catch {
             // El metodo `set` se llamo desde un Server Component.
             // Puede ignorarse si el middleware refresca la sesion.

@@ -143,9 +143,9 @@ export function InventarioClient({ initialProducts }: { initialProducts: any[] }
                 <FileSpreadsheet className="mr-2 h-4 w-4" />
                 Exportar Excel
               </Button>
-              <Button size="sm" onClick={handleOpenCreate}>
+              <Button size="sm" onClick={() => router.push('/compras')}>
                 <Plus className="mr-2 h-4 w-4" />
-                Agregar Producto
+                Comprar / Ingresar Nuevo
               </Button>
             </div>
           </CardAction>

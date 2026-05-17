@@ -11,6 +11,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createSale } from "@/app/actions/sales"
@@ -25,13 +35,20 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
   const clientes = initialClientes
   const productos = initialProductos
 
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<"list" | "create">("list")
   const [detailSale, setDetailSale] = useState<any>(null)
+  
+  // Create Sale State
   const [selectedClient, setSelectedClient] = useState<string>("")
+  const [newClientData, setNewClientData] = useState({ nombre: "", nit: "" })
   const [cart, setCart] = useState<{ product: any; quantity: number }[]>([])
-  const [selectedProduct, setSelectedProduct] = useState<string>("")
-  const [selectedQuantity, setSelectedQuantity] = useState<number>(1)
+  
+  const [productSearch, setProductSearch] = useState("")
+  const [selectedProduct, setSelectedProduct] = useState<any>(null)
+  const [selectedQuantity, setSelectedQuantity] = useState<number | "">(1)
+  
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   const today = new Date().toISOString().split("T")[0]
   const todaySales = sales.filter((s: any) => s.date === today)
@@ -48,38 +65,67 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
     s.nit.toLowerCase().includes(search.toLowerCase())
   )
 
-  const handleOpenCreate = () => { setSelectedClient(""); setCart([]); setSelectedProduct(""); setSelectedQuantity(1); setIsModalOpen(true) }
+  const handleOpenCreate = () => { 
+    setSelectedClient(""); 
+    setNewClientData({ nombre: "", nit: "" });
+    setCart([]); 
+    setSelectedProduct(null); 
+    setProductSearch("");
+    setSelectedQuantity(1); 
+    setViewMode("create"); 
+  }
+
+  const searchedProducts = productSearch.trim().length >= 2
+    ? productos.filter((p: any) => 
+        p.nombre?.toLowerCase().includes(productSearch.toLowerCase()) || 
+        p.codigo?.toLowerCase().includes(productSearch.toLowerCase()) || 
+        p.descripcion?.toLowerCase().includes(productSearch.toLowerCase())
+      )
+    : []
 
   const addToCart = () => {
     if (!selectedProduct) { toast.error("Seleccione un producto"); return }
-    const product = productos.find((p: any) => p.id_producto.toString() === selectedProduct)
-    if (!product) return
-    if (selectedQuantity <= 0) { toast.error("La cantidad debe ser mayor a 0"); return }
-    if (selectedQuantity > product.stock_disponible) { toast.error("No hay suficiente stock"); return }
-    const existing = cart.find((item) => item.product.id_producto === product.id_producto)
+    const qty = Number(selectedQuantity)
+    if (qty <= 0) { toast.error("La cantidad debe ser mayor a 0"); return }
+    if (qty > selectedProduct.stock_disponible) { toast.error(`No hay suficiente stock. Disponible: ${selectedProduct.stock_disponible}`); return }
+    
+    const existing = cart.find((item) => item.product.id_producto === selectedProduct.id_producto)
     if (existing) {
-      const newQ = existing.quantity + selectedQuantity
-      if (newQ > product.stock_disponible) { toast.error("La suma excede el stock disponible"); return }
-      setCart(cart.map((item) => item.product.id_producto === product.id_producto ? { ...item, quantity: newQ } : item))
+      const newQ = existing.quantity + qty
+      if (newQ > selectedProduct.stock_disponible) { toast.error("La suma excede el stock disponible"); return }
+      setCart(cart.map((item) => item.product.id_producto === selectedProduct.id_producto ? { ...item, quantity: newQ } : item))
     } else {
-      setCart([...cart, { product, quantity: selectedQuantity }])
+      setCart([...cart, { product: selectedProduct, quantity: qty }])
     }
-    setSelectedProduct(""); setSelectedQuantity(1)
+    setSelectedProduct(null)
+    setProductSearch("")
+    setSelectedQuantity(1)
   }
 
   const removeFromCart = (productId: number) => setCart(cart.filter((item) => item.product.id_producto !== productId))
   const cartTotal = cart.reduce((sum, item) => sum + item.product.precio_venta * item.quantity, 0)
 
   const handleSubmit = async () => {
+    setConfirmOpen(false)
     if (!selectedClient) { toast.error("Seleccione un cliente"); return }
+    if (selectedClient === "NEW" && !newClientData.nombre.trim()) {
+      toast.error("El nombre del nuevo cliente es obligatorio");
+      return;
+    }
     if (cart.length === 0) { toast.error("Agregue al menos un producto"); return }
     setIsSubmitting(true)
     try {
       const result = await createSale({
-        id_cliente: parseInt(selectedClient), total: cartTotal,
+        id_cliente: selectedClient === "NEW" ? undefined : parseInt(selectedClient),
+        nuevo_cliente: selectedClient === "NEW" ? newClientData : undefined,
+        total: cartTotal,
         detalles: cart.map((item) => ({ id_producto: item.product.id_producto, cantidad: item.quantity, precio_unitario: item.product.precio_venta, subtotal: item.quantity * item.product.precio_venta })),
       })
-      if (result.success) { toast.success("Venta registrada exitosamente"); setIsModalOpen(false); router.refresh() }
+      if (result.success) { 
+        toast.success("Venta registrada exitosamente"); 
+        setViewMode("list"); 
+        router.refresh();
+      }
       else toast.error(result.error || "Error al registrar venta")
     } catch { toast.error("Error inesperado") }
     finally { setIsSubmitting(false) }
@@ -118,6 +164,231 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
       ]} />
     )},
   ]
+
+  if (viewMode === "create") {
+    return (
+      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight text-primary">Nueva Venta (Punto de Venta)</h2>
+            <p className="text-muted-foreground mt-1">Busque productos, arme su carrito y registre la venta</p>
+          </div>
+          <Button variant="outline" onClick={() => setViewMode("list")}>Volver al Listado</Button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          {/* Lado Izquierdo: Buscador y Selección de Producto */}
+          <div className="lg:col-span-7 xl:col-span-8 space-y-6">
+            <Card className="border-t-4 border-t-primary shadow-md">
+              <CardHeader className="pb-3 bg-muted/20">
+                <CardTitle className="text-lg">Buscar Producto</CardTitle>
+                <CardDescription>Escriba el nombre, código o una palabra clave (min. 2 letras)</CardDescription>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                  <Input 
+                    className="h-14 pl-10 text-lg bg-background border-2 shadow-sm rounded-xl focus-visible:ring-primary" 
+                    placeholder="Buscar producto por nombre, código o descripción..." 
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                  />
+                </div>
+
+                {searchedProducts.length > 0 && !selectedProduct && (
+                  <div className="border rounded-xl max-h-64 overflow-y-auto bg-background p-2 space-y-2 shadow-inner">
+                    {searchedProducts.map((p: any) => (
+                      <button 
+                        key={p.id_producto}
+                        onClick={() => setSelectedProduct(p)}
+                        disabled={p.stock_disponible <= 0}
+                        className={`w-full text-left p-3 rounded-lg border transition-all ${
+                          p.stock_disponible <= 0 
+                            ? 'opacity-50 bg-destructive/5 border-destructive/20 cursor-not-allowed' 
+                            : 'hover:bg-primary/5 hover:border-primary/30 active:scale-[0.99]'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="font-bold text-base">{p.nombre}</div>
+                            <div className="text-xs text-muted-foreground mt-1">Código: {p.codigo} {p.descripcion ? `| ${p.descripcion}` : ""}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold text-primary text-lg">Q{p.precio_venta.toFixed(2)}</div>
+                            <div className={`text-xs font-semibold mt-1 ${p.stock_disponible <= 0 ? 'text-destructive' : 'text-emerald-600'}`}>
+                              Stock: {p.stock_disponible}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {productSearch.trim().length >= 2 && searchedProducts.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground bg-muted/10 rounded-xl border border-dashed">
+                    No se encontraron productos que coincidan con la búsqueda.
+                  </div>
+                )}
+
+                {/* Producto Seleccionado - Ingreso de Cantidad */}
+                {selectedProduct && (
+                  <div className="mt-6 p-5 rounded-xl border-2 border-primary/20 bg-primary/5 animate-in fade-in zoom-in-95">
+                    <div className="flex justify-between items-center mb-4">
+                      <div>
+                        <h3 className="font-bold text-xl text-primary">{selectedProduct.nombre}</h3>
+                        <p className="text-sm text-muted-foreground">{selectedProduct.codigo} | Stock: {selectedProduct.stock_disponible}</p>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedProduct(null)} className="h-8">Cambiar</Button>
+                    </div>
+                    <div className="flex items-end gap-4">
+                      <div className="space-y-2 flex-1">
+                        <Label className="font-bold">Cantidad a Vender</Label>
+                        <Input 
+                          type="number" 
+                          min="1" 
+                          className="h-12 text-lg font-bold" 
+                          value={selectedQuantity}
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSelectedQuantity(val === "" ? "" : parseInt(val));
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="font-bold text-muted-foreground">Precio Unitario</Label>
+                        <div className="h-12 px-4 flex items-center rounded-md bg-muted font-medium text-lg">
+                          Q{selectedProduct.precio_venta.toFixed(2)}
+                        </div>
+                      </div>
+                      <Button 
+                        onClick={addToCart} 
+                        size="lg" 
+                        className="h-12 px-8 text-base font-bold shadow-md"
+                        disabled={selectedQuantity === "" || Number(selectedQuantity) <= 0 || Number(selectedQuantity) > selectedProduct.stock_disponible}
+                      >
+                        <Plus className="mr-2 h-5 w-5" /> Agregar al Carrito
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Lado Derecho: Carrito y Cierre */}
+          <div className="lg:col-span-5 xl:col-span-4 space-y-6">
+            <Card className="shadow-lg border-primary/10">
+              <CardHeader className="bg-primary/5 border-b pb-4">
+                <CardTitle className="text-xl flex items-center gap-2"><ShoppingCart className="h-5 w-5 text-primary" /> Datos de Venta</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="p-5 border-b space-y-3">
+                  <Label className="font-bold">Cliente *</Label>
+                  <Select value={selectedClient} onValueChange={setSelectedClient}>
+                    <SelectTrigger className="h-11"><SelectValue placeholder="Seleccione un cliente..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NEW" className="font-bold text-primary border-b mb-1">
+                        + Crear Nuevo Cliente
+                      </SelectItem>
+                      {clientes.map((c: any) => (
+                        <SelectItem key={c.id_cliente} value={c.id_cliente.toString()}>
+                          <span className="font-medium">{c.nombre}</span> <span className="text-muted-foreground">(NIT: {c.nit || "C/F"})</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  
+                  {selectedClient === "NEW" && (
+                    <div className="grid grid-cols-2 gap-3 mt-3 animate-in fade-in zoom-in-95 p-3 bg-muted/30 rounded-lg border">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Nombre completo *</Label>
+                        <Input 
+                          placeholder="Juan Pérez" 
+                          value={newClientData.nombre} 
+                          onChange={(e) => setNewClientData({...newClientData, nombre: e.target.value})} 
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">NIT</Label>
+                        <Input 
+                          placeholder="Opcional (Ej. C/F)" 
+                          value={newClientData.nit} 
+                          onChange={(e) => setNewClientData({...newClientData, nit: e.target.value})} 
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="max-h-[350px] overflow-y-auto p-2 bg-muted/5">
+                  {cart.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground flex flex-col items-center">
+                      <ShoppingCart className="h-12 w-12 mb-3 opacity-20" />
+                      <p>El carrito está vacío</p>
+                      <p className="text-xs mt-1">Busque y agregue productos</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 p-3">
+                      {cart.map((item, idx) => (
+                        <div key={idx} className="flex flex-col bg-background border rounded-lg p-3 shadow-sm relative group">
+                          <div className="flex justify-between items-start">
+                            <div className="font-bold text-sm leading-tight pr-6">{item.product.nombre}</div>
+                            <button onClick={() => removeFromCart(item.product.id_producto)} className="absolute top-3 right-3 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div className="flex justify-between items-end mt-2">
+                            <div className="text-xs font-medium bg-muted/50 px-2 py-1 rounded">Cant: {item.quantity} x Q{item.product.precio_venta.toFixed(2)}</div>
+                            <div className="font-bold text-primary">Q{(item.quantity * item.product.precio_venta).toFixed(2)}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                <div className="bg-primary/5 p-5 border-t">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-lg font-bold text-muted-foreground">TOTAL:</span>
+                    <span className="text-3xl font-black text-primary">Q{cartTotal.toFixed(2)}</span>
+                  </div>
+                  <Button 
+                    onClick={() => setConfirmOpen(true)} 
+                    disabled={isSubmitting || cart.length === 0 || !selectedClient} 
+                    className="w-full h-14 text-lg font-bold shadow-lg"
+                  >
+                    Confirmar Venta
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Modal Confirmación Venta */}
+        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Confirmar Registro de Venta?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Está a punto de registrar la venta por un total de <strong>Q{cartTotal.toFixed(2)}</strong> para el cliente seleccionado.
+                Esto rebajará inmediatamente el stock del inventario.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isSubmitting}>Revisar de nuevo</AlertDialogCancel>
+              <AlertDialogAction onClick={(e) => { e.preventDefault(); handleSubmit(); }} disabled={isSubmitting} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                {isSubmitting ? "Procesando..." : "Sí, Registrar Venta"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+      </div>
+    )
+  }
 
   return (
     <>
@@ -169,75 +440,6 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
               </div>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Nueva venta */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>Nueva Venta</DialogTitle></DialogHeader>
-          <div className="space-y-6 py-4">
-            <div className="space-y-2">
-              <Label>Cliente</Label>
-              <Select value={selectedClient} onValueChange={setSelectedClient}>
-                <SelectTrigger><SelectValue placeholder="Seleccione un cliente..." /></SelectTrigger>
-                <SelectContent>
-                  {clientes.map((c: any) => (
-                    <SelectItem key={c.id_cliente} value={c.id_cliente.toString()}>{c.nombre} (NIT: {c.nit || "C/F"})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-end gap-3 rounded-lg border bg-muted/20 p-4">
-              <div className="flex-1 space-y-2">
-                <Label>Producto</Label>
-                <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-                  <SelectTrigger><SelectValue placeholder="Buscar producto..." /></SelectTrigger>
-                  <SelectContent>
-                    {productos.map((p: any) => (
-                      <SelectItem key={p.id_producto} value={p.id_producto.toString()} disabled={p.stock_disponible <= 0}>
-                        {p.codigo} - {p.nombre} (Stock: {p.stock_disponible}) - Q{p.precio_venta}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="w-24 space-y-2">
-                <Label>Cantidad</Label>
-                <Input type="number" min="1" value={selectedQuantity} onChange={(e) => setSelectedQuantity(parseInt(e.target.value) || 1)} />
-              </div>
-              <Button onClick={addToCart} type="button">Agregar</Button>
-            </div>
-            {cart.length > 0 && (
-              <div className="overflow-hidden rounded-lg border">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50">
-                    <tr><th className="px-4 py-2 text-left font-medium">Producto</th><th className="w-24 px-4 py-2 text-right font-medium">Cant.</th><th className="w-32 px-4 py-2 text-right font-medium">Precio</th><th className="w-32 px-4 py-2 text-right font-medium">Subtotal</th><th className="w-16 px-4 py-2"></th></tr>
-                  </thead>
-                  <tbody>
-                    {cart.map((item, idx) => (
-                      <tr key={idx} className="border-t">
-                        <td className="px-4 py-2">{item.product.nombre}</td>
-                        <td className="px-4 py-2 text-right">{item.quantity}</td>
-                        <td className="px-4 py-2 text-right">Q{item.product.precio_venta.toFixed(2)}</td>
-                        <td className="px-4 py-2 text-right font-medium">Q{(item.quantity * item.product.precio_venta).toFixed(2)}</td>
-                        <td className="px-4 py-2 text-center">
-                          <button onClick={() => removeFromCart(item.product.id_producto)} className="text-destructive hover:text-destructive/80"><Trash2 className="h-4 w-4" /></button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-muted/20 font-bold">
-                    <tr className="border-t"><td colSpan={3} className="px-4 py-3 text-right">TOTAL:</td><td className="px-4 py-3 text-right text-lg text-primary">Q{cartTotal.toFixed(2)}</td><td></td></tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting || cart.length === 0 || !selectedClient}>{isSubmitting ? "Procesando..." : "Confirmar Venta"}</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

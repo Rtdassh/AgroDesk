@@ -9,3 +9,8 @@ node_modules/
 .env*.local
 .DS_Store
 agrodesk_llm_context.md
+
+# Archivos de credenciales y descargas
+env.download
+.env
+.env.download
