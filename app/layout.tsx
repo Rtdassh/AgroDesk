@@ -16,7 +16,6 @@ export const metadata: Metadata = {
   description: 'Sistema integral de ventas e inventario agricola',
   icons: {
     icon: '/icon.svg',
-    apple: '/apple-icon.png',
   }
 }
 
