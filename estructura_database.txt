@@ -136,3 +136,4 @@ CREATE TABLE comprobantes (
     correlativo VARCHAR(50) NOT NULL UNIQUE,
     fecha_emision TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+

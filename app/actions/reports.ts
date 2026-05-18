@@ -66,7 +66,7 @@ export const getReportData = unstable_cache(
     let ingresosMes = 0
     let egresosMes = 0
     ventas.forEach((v: any) => { if (new Date(v.fecha) >= startOfCurrentMonth) ingresosMes += Number(v.total) })
-    pagos.forEach((p: any) => { if (new Date(p.fecha_pago) >= startOfCurrentMonth) egresosMes += Number(p.monto_pagado) })
+    compras.forEach((c: any) => { if (new Date(c.fecha) >= startOfCurrentMonth) egresosMes += Number(c.total) })
     const gananciaNeta = ingresosMes - egresosMes
 
     const ventasMes = ventas.filter((v: any) => new Date(v.fecha) >= startOfCurrentMonth)
@@ -95,9 +95,9 @@ export const getReportData = unstable_cache(
     }
 
     const ventasMap = sumByMonth(ventas as any[], "fecha", "total")
-    const pagosMap = sumByMonth(pagos as any[], "fecha_pago", "monto_pagado")
+    const comprasMap = sumByMonth(compras as any[], "fecha", "total")
     const ventasPorMes = months.map((m) => ({ mes: m.label, total: ventasMap.get(m.key) ?? 0 }))
-    const ingresosVsEgresos = months.map((m) => ({ mes: m.label, ingresos: ventasMap.get(m.key) ?? 0, egresos: pagosMap.get(m.key) ?? 0 }))
+    const ingresosVsEgresos = months.map((m) => ({ mes: m.label, ingresos: ventasMap.get(m.key) ?? 0, egresos: comprasMap.get(m.key) ?? 0 }))
 
     const productoAgg = new Map<string, { producto: string; cantidad: number; total: number }>()
     detalles.forEach((d: any) => {

@@ -27,61 +27,70 @@ import { exportCSV } from "@/lib/export-csv"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
-export function ComprasClient({ 
-  initialPurchases, 
-  initialProveedores, 
-  initialProductos, 
-  initialCategorias 
-}: { 
-  initialPurchases: any[]; 
-  initialProveedores: any[]; 
+export function ComprasClient({
+  initialPurchases,
+  initialProveedores,
+  initialProductos,
+  initialCategorias,
+  isCajaAbierta
+}: {
+  initialPurchases: any[];
+  initialProveedores: any[];
   initialProductos: any[];
   initialCategorias: any[];
+  isCajaAbierta: boolean;
 }) {
   const router = useRouter()
-  
+
   // Vista principal vs Formulario a pantalla completa
   const [viewMode, setViewMode] = useState<"list" | "create">("list")
-  
+
   const [search, setSearch] = useState("")
+  const [dateFilter, setDateFilter] = useState("")
   const purchases = initialPurchases
   const proveedores = initialProveedores
   const productos = initialProductos
   const categorias = initialCategorias || []
 
   const [detailPurchase, setDetailPurchase] = useState<any>(null)
-  
+
   // Nuevo pedido state
   const [providerMode, setProviderMode] = useState<"existente" | "nuevo">("existente")
   const [selectedProvider, setSelectedProvider] = useState<string>("")
   const [nuevoProviderNombre, setNuevoProviderNombre] = useState("")
   const [nuevoProviderNit, setNuevoProviderNit] = useState("")
-  
+
   const [invoiceNumber, setInvoiceNumber] = useState<string>("")
   const [serieFactura, setSerieFactura] = useState<string>("")
   const [cart, setCart] = useState<any[]>([])
-  
+
   // Product Form State
   const [productMode, setProductMode] = useState<"existente" | "nuevo">("existente")
   const [selectedProductId, setSelectedProductId] = useState<string>("")
   const [prodNombre, setProdNombre] = useState("")
   const [prodCodigo, setProdCodigo] = useState("")
   const [prodDesc, setProdDesc] = useState("")
-  
+
   const [catMode, setCatMode] = useState<"existente" | "nueva">("existente")
   const [selectedCatId, setSelectedCatId] = useState<string>("")
   const [nuevaCatNombre, setNuevaCatNombre] = useState("")
-  
+
   const [prodSubcat, setProdSubcat] = useState("")
-  const [prodUM, setProdUM] = useState("")
+
+  // Unidad de Medida State
+  const [umMode, setUmMode] = useState<"existente" | "nueva">("existente")
+  const [prodUMValor, setProdUMValor] = useState<number | "">("")
+  const [prodUMTexto, setProdUMTexto] = useState("")
+  const [nuevaUMTexto, setNuevaUMTexto] = useState("")
+
   const [prodMarca, setProdMarca] = useState("")
   const [prodCompra, setProdCompra] = useState<number>(0)
   const [prodVenta, setProdVenta] = useState<number | "">(0)
-  
+
   const [selectedQuantity, setSelectedQuantity] = useState<number | "">(1)
   const [selectedLote, setSelectedLote] = useState<string>("")
   const [selectedVencimiento, setSelectedVencimiento] = useState<string>("")
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
 
@@ -90,12 +99,16 @@ export function ComprasClient({
   const uniqueNombres = Array.from(new Set(productos.map((p: any) => p.nombre).filter(Boolean)));
   const uniqueUMs = Array.from(new Set(productos.map((p: any) => p.unidad_medida).filter(Boolean)));
 
-  const filteredPurchases = purchases.filter((s: any) =>
-    s.provider.toLowerCase().includes(search.toLowerCase()) ||
-    s.id.toLowerCase().includes(search.toLowerCase()) ||
-    s.invoice.toLowerCase().includes(search.toLowerCase()) ||
-    (s.serie_factura && s.serie_factura.toLowerCase().includes(search.toLowerCase()))
-  )
+  const filteredPurchases = purchases.filter((s: any) => {
+    const matchesSearch = s.provider.toLowerCase().includes(search.toLowerCase()) ||
+      s.id.toLowerCase().includes(search.toLowerCase()) ||
+      s.invoice.toLowerCase().includes(search.toLowerCase()) ||
+      (s.serie_factura && s.serie_factura.toLowerCase().includes(search.toLowerCase()));
+
+    const matchesDate = dateFilter ? s.date.includes(dateFilter) : true;
+
+    return matchesSearch && matchesDate;
+  })
 
   const resetProductSelection = () => {
     setSelectedProductId("")
@@ -106,7 +119,10 @@ export function ComprasClient({
     setSelectedCatId("")
     setNuevaCatNombre("")
     setProdSubcat("")
-    setProdUM("")
+    setUmMode("existente")
+    setProdUMValor("")
+    setProdUMTexto("")
+    setNuevaUMTexto("")
     setProdMarca("")
     setProdCompra(0)
     setProdVenta(0)
@@ -115,7 +131,11 @@ export function ComprasClient({
     setSelectedVencimiento("")
   }
 
-  const handleOpenCreate = () => { 
+  const handleOpenCreate = () => {
+    if (!isCajaAbierta) {
+      toast.error("Debe abrir caja desde Finanzas antes de operar.");
+      return;
+    }
     setProviderMode("existente")
     setSelectedProvider("")
     setNuevoProviderNombre("")
@@ -125,7 +145,7 @@ export function ComprasClient({
     setCart([])
     setProductMode("existente")
     resetProductSelection()
-    setViewMode("create") 
+    setViewMode("create")
   }
 
   const handleProductSelect = (val: string) => {
@@ -134,7 +154,7 @@ export function ComprasClient({
       resetProductSelection()
       return
     }
-    
+
     setProductMode("existente")
     setSelectedProductId(val)
     const p = productos.find((x: any) => x.id_producto.toString() === val)
@@ -143,14 +163,30 @@ export function ComprasClient({
       setProdNombre(p.nombre || "")
       setProdDesc(p.descripcion || "")
       if (p.id_categoria) {
-         setCatMode("existente")
-         setSelectedCatId(p.id_categoria.toString())
+        setCatMode("existente")
+        setSelectedCatId(p.id_categoria.toString())
       } else {
-         setCatMode("existente")
-         setSelectedCatId("")
+        setCatMode("existente")
+        setSelectedCatId("")
       }
       setProdSubcat(p.subcategoria || "")
-      setProdUM(p.unidad_medida || "")
+      // Extract number and text if possible from "5 Litros"
+      if (p.unidad_medida) {
+        const match = p.unidad_medida.match(/^(\d+(?:\.\d+)?)\s+(.+)$/);
+        if (match) {
+          setProdUMValor(parseFloat(match[1]));
+          setUmMode("existente");
+          setProdUMTexto(match[2]);
+        } else {
+          setProdUMValor("");
+          setUmMode("existente");
+          setProdUMTexto(p.unidad_medida);
+        }
+      } else {
+        setProdUMValor("");
+        setUmMode("existente");
+        setProdUMTexto("");
+      }
       setProdMarca(p.marca || "")
       setProdCompra(p.precio_compra || 0)
       setProdVenta(p.precio_venta || 0)
@@ -162,7 +198,9 @@ export function ComprasClient({
     if (catMode === "existente" && !selectedCatId) { toast.error("Seleccione una categoría"); return }
     if (catMode === "nueva" && !nuevaCatNombre) { toast.error("Ingrese el nombre de la nueva categoría"); return }
     if (productMode === "nuevo" && !prodCodigo) { toast.error("Debe ingresar un código para el nuevo producto"); return }
-    
+    if (umMode === "existente" && !prodUMTexto && prodUMValor) { toast.error("Debe seleccionar una unidad de medida existente si ha ingresado una cantidad"); return }
+    if (umMode === "nueva" && !nuevaUMTexto) { toast.error("Debe ingresar el nombre de la nueva unidad de medida"); return }
+
     if (productMode === "nuevo") {
       const exists = productos.some((p: any) => p.codigo?.toLowerCase() === prodCodigo.toLowerCase());
       if (exists) { toast.error(`El código ${prodCodigo} ya existe en el inventario`); return }
@@ -176,7 +214,7 @@ export function ComprasClient({
     if (!selectedLote) { toast.error("El número de lote es obligatorio"); return }
     if (!selectedVencimiento) { toast.error("La fecha de caducidad es obligatoria"); return }
 
-    setCart([...cart, { 
+    setCart([...cart, {
       id_producto: productMode === "existente" ? parseInt(selectedProductId) : undefined,
       codigo: productMode === "nuevo" ? prodCodigo : undefined,
       nombre: prodNombre,
@@ -184,16 +222,18 @@ export function ComprasClient({
       id_categoria: catMode === "existente" ? parseInt(selectedCatId) : undefined,
       nuevaCategoria: catMode === "nueva" ? nuevaCatNombre : undefined,
       subcategoria: prodSubcat,
-      unidad_medida: prodUM,
+      unidad_medida: umMode === "nueva"
+        ? (prodUMValor ? `${prodUMValor} ${nuevaUMTexto}` : nuevaUMTexto)
+        : (prodUMValor && prodUMTexto ? `${prodUMValor} ${prodUMTexto}` : prodUMTexto),
       marca: prodMarca,
       precio_compra: Number(prodCompra),
       precio_venta: Number(prodVenta),
-      cantidad: Number(selectedQuantity), 
+      cantidad: Number(selectedQuantity),
       subtotal: Number(selectedQuantity) * Number(prodCompra),
       lote: selectedLote,
       vencimiento: selectedVencimiento
     }])
-    
+
     setProductMode("existente")
     resetProductSelection()
   }
@@ -203,7 +243,7 @@ export function ComprasClient({
     newCart.splice(index, 1)
     setCart(newCart)
   }
-  
+
   const cartTotal = cart.reduce((sum, item) => sum + item.subtotal, 0)
   const cartPrecioNeto = cartTotal / 1.12
   const cartIva = cartPrecioNeto * 0.12
@@ -231,10 +271,10 @@ export function ComprasClient({
           fecha_vencimiento: item.vencimiento || undefined
         })),
       })
-      if (result.success) {  
+      if (result.success) {
         toast.success("Compra registrada exitosamente")
         setViewMode("list")
-        router.refresh() 
+        router.refresh()
       } else {
         toast.error(result.error || "Error al registrar compra")
       }
@@ -243,13 +283,13 @@ export function ComprasClient({
   }
 
   const handleExport = () => {
-    exportCSV("compras", 
+    exportCSV("compras",
       ["No. Compra", "Fecha", "Proveedor", "NIT", "Serie Factura", "Doc. Factura", "Precio Neto", "IVA", "Total", "Items"],
       filteredPurchases.map((s: any) => [
-        s.id, s.date, s.provider, s.nit, s.serie_factura, s.invoice, 
-        s.precio_neto?.toFixed(2) || "0.00", 
-        s.iva?.toFixed(2) || "0.00", 
-        s.total, 
+        s.id, s.date, s.provider, s.nit, s.serie_factura, s.invoice,
+        s.precio_neto?.toFixed(2) || "0.00",
+        s.iva?.toFixed(2) || "0.00",
+        s.total,
         s.items
       ])
     )
@@ -259,19 +299,23 @@ export function ComprasClient({
     { key: "id", header: "No. Compra", render: (r) => <span className="font-medium">{r.id}</span> },
     { key: "date", header: "Fecha", render: (r) => <span className="text-muted-foreground">{r.date}</span> },
     { key: "provider", header: "Proveedor", render: (r) => r.provider },
-    { key: "invoice", header: "Serie - Factura", render: (r) => {
-      if (r.serie_factura !== "--" && r.invoice !== "--") return `${r.serie_factura} - ${r.invoice}`;
-      if (r.serie_factura !== "--") return `Serie ${r.serie_factura}`;
-      if (r.invoice !== "--") return r.invoice;
-      return "--";
-    }},
+    {
+      key: "invoice", header: "Serie - Factura", render: (r) => {
+        if (r.serie_factura !== "--" && r.invoice !== "--") return `${r.serie_factura} - ${r.invoice}`;
+        if (r.serie_factura !== "--") return `Serie ${r.serie_factura}`;
+        if (r.invoice !== "--") return r.invoice;
+        return "--";
+      }
+    },
     { key: "items", header: "Items", render: (r) => r.items },
     { key: "total", header: "Total (Q)", render: (r) => <span className="font-medium">Q{r.total.toLocaleString("en", { minimumFractionDigits: 2 })}</span> },
-    { key: "actions", header: "", render: (r) => (
-      <RowActions actions={[
-        { label: "Ver detalle", icon: Eye, onClick: () => setDetailPurchase(r) },
-      ]} />
-    )},
+    {
+      key: "actions", header: "", render: (r) => (
+        <RowActions actions={[
+          { label: "Ver detalle", icon: Eye, onClick: () => setDetailPurchase(r) },
+        ]} />
+      )
+    },
   ]
 
   // ============================================================================
@@ -288,10 +332,10 @@ export function ComprasClient({
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
+
           {/* Columna Izquierda: Formulario */}
           <div className="lg:col-span-8 space-y-6">
-            
+
             <Card className="border-border/50 shadow-sm overflow-hidden">
               <CardHeader className="bg-gradient-to-r from-muted/50 to-transparent border-b">
                 <CardTitle className="text-lg">1. Datos Generales del Proveedor</CardTitle>
@@ -308,15 +352,17 @@ export function ComprasClient({
                       setSelectedProvider(val)
                     }
                   }}>
-                    <SelectTrigger className="h-11"><SelectValue placeholder="Seleccione proveedor..." /></SelectTrigger>
-                    <SelectContent>
+                    <SelectTrigger className="h-11 w-full [&>span]:truncate"><SelectValue placeholder="Seleccione proveedor..." /></SelectTrigger>
+                    <SelectContent className="max-w-[80vw] sm:max-w-[400px]">
                       <SelectItem value="nuevo" className="font-bold text-primary">+ Crear Nuevo Proveedor</SelectItem>
                       {proveedores.map((p: any) => (
-                        <SelectItem key={p.id_proveedor} value={p.id_proveedor.toString()}>{p.nombre} (NIT: {p.nit || "C/F"})</SelectItem>
+                        <SelectItem key={p.id_proveedor} value={p.id_proveedor.toString()} className="truncate">
+                          {p.nombre} (NIT: {p.nit || "C/F"})
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  
+
                   {providerMode === "nuevo" && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
                       <Input className="h-11" value={nuevoProviderNombre} onChange={(e) => setNuevoProviderNombre(e.target.value)} placeholder="Nombre del proveedor" />
@@ -358,11 +404,11 @@ export function ComprasClient({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-3">
                     <Label className="text-sm font-semibold">Código del Producto {productMode === "nuevo" && "*"}</Label>
-                    <Input 
-                      className="h-11" 
-                      value={prodCodigo} 
-                      onChange={(e) => setProdCodigo(e.target.value)} 
-                      placeholder="Ej. PRD-001" 
+                    <Input
+                      className="h-11"
+                      value={prodCodigo}
+                      onChange={(e) => setProdCodigo(e.target.value)}
+                      placeholder="Ej. PRD-001"
                       disabled={productMode === "existente"}
                     />
                   </div>
@@ -390,7 +436,7 @@ export function ComprasClient({
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
                   <div className="space-y-4 p-4 border rounded-xl bg-muted/10">
                     <Label className="text-sm font-bold text-primary block">Categoría *</Label>
-                    
+
                     <div className="space-y-3">
                       <Select value={catMode} onValueChange={(v: any) => setCatMode(v)}>
                         <SelectTrigger className="h-11 bg-background"><SelectValue /></SelectTrigger>
@@ -399,7 +445,7 @@ export function ComprasClient({
                           <SelectItem value="nueva">+ Crear Nueva</SelectItem>
                         </SelectContent>
                       </Select>
-                      
+
                       {catMode === "existente" ? (
                         <Select value={selectedCatId} onValueChange={(val) => {
                           setSelectedCatId(val);
@@ -420,18 +466,58 @@ export function ComprasClient({
                       )}
                     </div>
                   </div>
-                  
+
                   <div className="space-y-3 p-4 border rounded-xl">
                     <Label className="text-sm font-semibold block mb-1">Subcategoría</Label>
                     <Input className="h-11" value={prodSubcat} onChange={(e) => setProdSubcat(e.target.value)} placeholder="Ej. Foliar" />
                   </div>
-                  
+
                   <div className="space-y-3 p-4 border rounded-xl">
                     <Label className="text-sm font-semibold block mb-1">Unidad Medida</Label>
-                    <Input list="um-list" className="h-11" value={prodUM} onChange={(e) => setProdUM(e.target.value)} placeholder="Ej. Litro, Kg" />
-                    <datalist id="um-list">
-                      {uniqueUMs.map((u: any) => <option key={u} value={u} />)}
-                    </datalist>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          placeholder="Cant."
+                          className="h-11 w-20 bg-background"
+                          value={prodUMValor}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setProdUMValor(val === "" ? "" : parseFloat(val));
+                          }}
+                        />
+                        <div className="flex-1">
+                          <Select value={umMode} onValueChange={(v: any) => setUmMode(v)}>
+                            <SelectTrigger className="h-11 bg-background"><SelectValue placeholder="Tipo" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="existente">Existente</SelectItem>
+                              <SelectItem value="nueva">+ Crear Nueva</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {umMode === "existente" ? (
+                        <Select value={prodUMTexto} onValueChange={setProdUMTexto}>
+                          <SelectTrigger className="h-11 bg-background"><SelectValue placeholder="Seleccione UM..." /></SelectTrigger>
+                          <SelectContent>
+                            {uniqueUMs.map((u: any) => {
+                              // Filter out numeric parts to just show the base units, or just show them all
+                              const baseUnitMatch = u.match(/^(?:\d+(?:\.\d+)?\s+)?(.+)$/);
+                              const displayUnit = baseUnitMatch ? baseUnitMatch[1] : u;
+                              return <SelectItem key={u} value={displayUnit}>{displayUnit}</SelectItem>
+                            })}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          className="h-11 bg-background"
+                          value={nuevaUMTexto}
+                          onChange={(e) => setNuevaUMTexto(e.target.value)}
+                          placeholder="Ej. Litro, Saco..."
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -441,17 +527,17 @@ export function ComprasClient({
                     <Label className="text-sm font-bold">Precio Compra *</Label>
                     <div className="relative">
                       <span className="absolute left-3 top-3 text-muted-foreground">Q</span>
-                      <Input 
-                        className="h-11 pl-8 bg-background font-medium" 
-                        type="number" 
-                        step="0.01" 
-                        min="0" 
-                        value={prodCompra} 
+                      <Input
+                        className="h-11 pl-8 bg-background font-medium"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={prodCompra}
                         onFocus={(e) => e.target.select()}
                         onChange={(e) => {
                           const val = e.target.value;
                           setProdCompra(val === "" ? "" : parseFloat(val));
-                        }} 
+                        }}
                       />
                     </div>
                   </div>
@@ -459,32 +545,32 @@ export function ComprasClient({
                     <Label className="text-sm font-bold">Precio Venta</Label>
                     <div className="relative">
                       <span className="absolute left-3 top-3 text-muted-foreground">Q</span>
-                      <Input 
-                        className="h-11 pl-8 bg-background font-medium" 
-                        type="number" 
-                        step="0.01" 
-                        min="0" 
-                        value={prodVenta} 
+                      <Input
+                        className="h-11 pl-8 bg-background font-medium"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={prodVenta}
                         onFocus={(e) => e.target.select()}
                         onChange={(e) => {
                           const val = e.target.value;
                           setProdVenta(val === "" ? "" : parseFloat(val));
-                        }} 
+                        }}
                       />
                     </div>
                   </div>
                   <div className="space-y-3">
                     <Label className="text-sm font-bold">Cantidad a Ingresar *</Label>
-                    <Input 
-                      className="h-11 bg-background font-bold text-primary" 
-                      type="number" 
-                      min="1" 
-                      value={selectedQuantity} 
+                    <Input
+                      className="h-11 bg-background font-bold text-primary"
+                      type="number"
+                      min="1"
+                      value={selectedQuantity}
                       onFocus={(e) => e.target.select()}
                       onChange={(e) => {
                         const val = e.target.value;
                         setSelectedQuantity(val === "" ? "" : parseInt(val));
-                      }} 
+                      }}
                     />
                   </div>
                 </div>
@@ -537,7 +623,10 @@ export function ComprasClient({
                             <span>{item.cantidad} x Q{item.precio_compra.toFixed(2)}</span>
                             <span className="font-bold text-foreground">Q{item.subtotal.toFixed(2)}</span>
                           </div>
-                          {item.nuevaCategoria && <div className="text-[10px] text-primary bg-primary/10 inline-block px-2 py-0.5 rounded-full mt-1">+ Nueva Cat: {item.nuevaCategoria}</div>}
+                          <div className="flex gap-2 items-center flex-wrap">
+                            {item.nuevaCategoria && <div className="text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full mt-1">+ Nueva Cat: {item.nuevaCategoria}</div>}
+                            {item.lote && <div className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full mt-1">Lote: {item.lote}</div>}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -560,16 +649,16 @@ export function ComprasClient({
                 </div>
 
                 <div className="p-5 pt-2 space-y-3">
-                  <Button 
-                    onClick={() => setConfirmOpen(true)} 
-                    disabled={isSubmitting || cart.length === 0 || (providerMode === "existente" && !selectedProvider) || (providerMode === "nuevo" && !nuevoProviderNombre)} 
+                  <Button
+                    onClick={() => setConfirmOpen(true)}
+                    disabled={isSubmitting || cart.length === 0 || (providerMode === "existente" && !selectedProvider) || (providerMode === "nuevo" && !nuevoProviderNombre)}
                     className="w-full h-14 text-base font-bold shadow-lg"
                   >
                     {isSubmitting ? "Procesando..." : "Confirmar e Ingresar a Inventario"}
                   </Button>
-                  <Button 
+                  <Button
                     variant="outline"
-                    onClick={() => setViewMode("list")} 
+                    onClick={() => setViewMode("list")}
                     disabled={isSubmitting}
                     className="w-full h-12 text-muted-foreground hover:text-foreground"
                   >
@@ -613,6 +702,18 @@ export function ComprasClient({
     <>
       <PageHeader icon={ShoppingBag} title="Gestión de Compras" />
 
+      {!isCajaAbierta && (
+        <div className="bg-destructive/15 text-destructive p-4 rounded-lg border border-destructive/30 flex items-center mb-6">
+          <div className="mr-3 p-2 bg-destructive/20 rounded-full">
+            <DollarSign className="h-6 w-6" />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg">La caja está cerrada</h3>
+            <p className="text-sm opacity-90">Debe abrir la caja desde el módulo de Finanzas antes de poder registrar nuevas compras o pagos.</p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Compras Totales" value={purchases.length.toString()} icon={ShoppingBag} subtitle="Histórico" />
         <StatCard title="Inversión Total" value={`Q${totalMonth.toLocaleString("en", { minimumFractionDigits: 2 })}`} icon={DollarSign} subtitle="Valor histórico" />
@@ -627,14 +728,22 @@ export function ComprasClient({
           <CardAction>
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" onClick={handleExport}><FileDown className="mr-2 h-4 w-4" />Exportar</Button>
-              <Button size="sm" onClick={handleOpenCreate}><Plus className="mr-2 h-4 w-4" />Nueva Compra</Button>
+              <Button size="sm" onClick={handleOpenCreate} className={!isCajaAbierta ? "opacity-50 cursor-not-allowed" : ""}><Plus className="mr-2 h-4 w-4" />Nueva Compra</Button>
             </div>
           </CardAction>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Buscar por proveedor, factura..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <div className="mb-4 flex flex-col sm:flex-row gap-3">
+            <div className="relative max-w-sm flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Buscar por proveedor, factura..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+            <div className="relative w-full sm:w-auto">
+              <Input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-full sm:w-[200px]" />
+              {dateFilter && (
+                <button onClick={() => setDateFilter("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs font-medium">Limpiar</button>
+              )}
+            </div>
           </div>
           <DataTable columns={columns} data={filteredPurchases} rowKey={(r) => r.id} emptyIcon={ShoppingBag} emptyMessage="No se encontraron compras." />
         </CardContent>
@@ -642,7 +751,7 @@ export function ComprasClient({
 
       {/* Detalle de compra */}
       <Dialog open={detailPurchase !== null} onOpenChange={(open) => { if (!open) setDetailPurchase(null) }}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[95vw] w-[95vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Detalle de Compra {detailPurchase?.id}</DialogTitle></DialogHeader>
           {detailPurchase && (
             <div className="space-y-4 text-sm">
@@ -659,7 +768,7 @@ export function ComprasClient({
                   <div><span className="text-muted-foreground block text-xs">Total Compra</span> <span className="font-bold text-primary">Q{detailPurchase.total.toLocaleString("en", { minimumFractionDigits: 2 })}</span></div>
                 </div>
               </div>
-              
+
               <div className="rounded-lg border">
                 <table className="w-full text-xs md:text-sm">
                   <thead className="bg-muted/50">
@@ -667,6 +776,8 @@ export function ComprasClient({
                       <th className="px-4 py-2 text-left font-medium">Producto</th>
                       <th className="px-4 py-2 text-left font-medium">Categoría</th>
                       <th className="px-4 py-2 text-left font-medium">Marca</th>
+                      <th className="px-4 py-2 text-left font-medium">No. Lote</th>
+                      <th className="px-4 py-2 text-left font-medium">Vencimiento</th>
                       <th className="px-4 py-2 text-right font-medium">Cant.</th>
                       <th className="px-4 py-2 text-right font-medium">Precio U.</th>
                       <th className="px-4 py-2 text-right font-medium">Subtotal</th>
@@ -676,17 +787,14 @@ export function ComprasClient({
                     {detailPurchase.detalles?.map((d: any, idx: number) => (
                       <tr key={idx} className="border-t">
                         <td className="px-4 py-2">
-                          <span className="font-medium block">{d.productos?.nombre}</span>
-                          {(d.lote || d.vencimiento) && (
-                            <span className="text-[10px] text-muted-foreground block mt-0.5">
-                              {d.lote && `Lote: ${d.lote} `}
-                              {d.vencimiento && `| Vence: ${d.vencimiento}`}
-                            </span>
-                          )}
+                          <span className="font-medium block text-sm">{d.productos?.nombre}</span>
+                          <span className="text-[11px] text-muted-foreground block line-clamp-1 mb-1">{d.productos?.descripcion || "--"}</span>
                           <span className="text-muted-foreground text-xs">{d.productos?.codigo}</span>
                         </td>
                         <td className="px-4 py-2">{d.productos?.categorias?.nombre || "--"}</td>
                         <td className="px-4 py-2">{d.productos?.marca || "--"}</td>
+                        <td className="px-4 py-2">{d.numero_lote || d.lote || "S/N"}</td>
+                        <td className="px-4 py-2">{d.vencimiento || "--"}</td>
                         <td className="px-4 py-2 text-right">{d.cantidad}</td>
                         <td className="px-4 py-2 text-right">Q{d.precio_unitario.toFixed(2)}</td>
                         <td className="px-4 py-2 text-right font-medium">Q{d.subtotal.toFixed(2)}</td>

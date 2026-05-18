@@ -20,7 +20,7 @@ export function StatCard({ title, value, icon: Icon, subtitle, change }: StatCar
           <Icon className="h-5 w-5" aria-hidden="true" />
         </div>
       </div>
-      <p className="mt-4 text-3xl font-black text-foreground tracking-tight relative z-10">{value}</p>
+      <p className="mt-4 text-2xl font-black text-foreground tracking-tight relative z-10 break-all" title={value}>{value}</p>
       {subtitle && <p className="mt-2 text-sm text-muted-foreground font-medium relative z-10">{subtitle}</p>}
       {change && <p className="mt-1 text-xs text-muted-foreground relative z-10">{change}</p>}
     </div>

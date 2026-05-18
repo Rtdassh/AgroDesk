@@ -21,6 +21,7 @@ import { useRouter } from "next/navigation"
 export function ClientesClient({ initialClients }: { initialClients: any[] }) {
   const router = useRouter()
   const [search, setSearch] = useState("")
+  const [dateFilter, setDateFilter] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingClient, setEditingClient] = useState<any>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -31,11 +32,15 @@ export function ClientesClient({ initialClients }: { initialClients: any[] }) {
   const totalDebt = clients.reduce((sum: number, c: any) => sum + c.balance, 0)
   const wholesaleClients = clients.filter((c: any) => c.type === "Mayorista").length
 
-  const filteredClients = clients.filter((c: any) =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.nit.toLowerCase().includes(search.toLowerCase()) ||
-    c.id.toLowerCase().includes(search.toLowerCase())
-  )
+  const filteredClients = clients.filter((c: any) => {
+    const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase()) ||
+      c.nit.toLowerCase().includes(search.toLowerCase()) ||
+      c.id.toLowerCase().includes(search.toLowerCase());
+
+    const matchesDate = dateFilter ? (c.lastPurchase && c.lastPurchase.includes(dateFilter)) : true;
+
+    return matchesSearch && matchesDate;
+  })
 
   const handleOpenCreate = () => { setEditingClient(null); setIsModalOpen(true) }
   const handleOpenEdit = (client: any) => { setEditingClient(client); setIsModalOpen(true) }
@@ -82,12 +87,14 @@ export function ClientesClient({ initialClients }: { initialClients: any[] }) {
     { key: "balance", header: "Saldo (Q)", render: (r) => <span className="font-medium">Q{r.balance.toLocaleString("en", { minimumFractionDigits: 2 })}</span> },
     { key: "lastPurchase", header: "Ult. Compra", render: (r) => <span className="text-muted-foreground">{r.lastPurchase}</span> },
     { key: "status", header: "Estado", render: (r) => <Badge variant={r.status === "Mora" ? "destructive" : r.status === "Con Credito" ? "secondary" : "outline"}>{r.status}</Badge> },
-    { key: "actions", header: "", render: (r) => (
-      <RowActions
-        actions={[{ label: "Editar", icon: Pencil, onClick: () => handleOpenEdit(r) }]}
-        deleteConfig={{ title: "Eliminar cliente", description: "El cliente sera eliminado permanentemente. Esta accion no se puede deshacer.", onConfirm: () => handleDelete(r.raw_id) }}
-      />
-    )},
+    {
+      key: "actions", header: "", render: (r) => (
+        <RowActions
+          actions={[{ label: "Editar", icon: Pencil, onClick: () => handleOpenEdit(r) }]}
+          deleteConfig={{ title: "Eliminar cliente", description: "El cliente sera eliminado permanentemente. Esta accion no se puede deshacer.", onConfirm: () => handleDelete(r.raw_id) }}
+        />
+      )
+    },
   ]
 
   return (
@@ -117,9 +124,17 @@ export function ClientesClient({ initialClients }: { initialClients: any[] }) {
           </CardAction>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Buscar por nombre, NIT..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <div className="mb-4 flex flex-col sm:flex-row gap-3">
+            <div className="relative max-w-sm flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Buscar por nombre, NIT..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+            <div className="relative w-full sm:w-auto">
+              <Input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-full sm:w-[200px]" title="Filtrar por fecha de última compra" />
+              {dateFilter && (
+                <button onClick={() => setDateFilter("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs font-medium">Limpiar</button>
+              )}
+            </div>
           </div>
           <DataTable columns={columns} data={filteredClients} rowKey={(r) => r.id} emptyIcon={Users} emptyMessage="No se encontraron clientes." />
         </CardContent>

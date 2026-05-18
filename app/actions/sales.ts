@@ -13,7 +13,7 @@ export const getSales = unstable_cache(
     const { data: ventas, error } = await supabase
       .from("ventas")
       .select(`
-        id_venta, fecha, total, estado,
+        id_venta, fecha, total, estado, descuento,
         clientes (nombre, nit)
       `)
       .order("fecha", { ascending: false });
@@ -30,7 +30,7 @@ export const getSales = unstable_cache(
       nit: venta.clientes?.nit || "C/F",
       items: 1,
       subtotal: venta.total,
-      discount: 0,
+      discount: venta.descuento || 0,
       total: venta.total,
       payment: "Contado",
       status: venta.estado,
@@ -45,7 +45,7 @@ export const getClientesForSale = unstable_cache(
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("clientes")
-      .select("id_cliente, nombre, nit");
+      .select("id_cliente, nombre, nit, tipo_cliente");
 
     if (error) {
       console.error("Error fetching clients:", error);
@@ -94,6 +94,7 @@ export async function createSale(data: {
   id_cliente?: number | string;
   nuevo_cliente?: { nombre: string; nit: string; telefono?: string; direccion?: string };
   total: number;
+  descuento?: number;
   detalles: {
     id_producto: number;
     cantidad: number;
@@ -109,7 +110,7 @@ export async function createSale(data: {
 
     if (!clientId && data.nuevo_cliente) {
       if (!data.nuevo_cliente.nombre) throw new Error("El nombre del cliente es obligatorio");
-      
+
       const { data: newClient, error: clientErr } = await supabase
         .from("clientes")
         .insert([{
@@ -120,10 +121,10 @@ export async function createSale(data: {
         }])
         .select("id_cliente")
         .single();
-      
+
       if (clientErr) throw new Error(`Error creando cliente: ${clientErr.message}`);
       clientId = newClient.id_cliente;
-      
+
       // Invalidate clients cache so it appears everywhere
       revalidateTag("clientes", "default");
     }
@@ -135,6 +136,7 @@ export async function createSale(data: {
       .insert([{
         id_cliente: clientId,
         total: data.total,
+        descuento: data.descuento || 0,
         estado: "Completada",
         id_usuario: profile.id_usuario,
       }])
@@ -198,6 +200,7 @@ export async function createSale(data: {
     revalidateTag("ventas", "default");
     revalidateTag("inventario", "default");
     revalidateTag("dashboard", "default");
+    revalidateTag("finanzas", "default");
 
     return { success: true, id_venta };
   } catch (error: any) {

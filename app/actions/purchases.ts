@@ -87,8 +87,8 @@ export const getPurchases = unstable_cache(
         total,
         proveedores (nombre, nit),
         detalle_compras (
-          cantidad, precio_unitario, subtotal,
-          productos (nombre, codigo, marca, categorias (nombre))
+          cantidad, precio_unitario, subtotal, numero_lote,
+          productos (nombre, codigo, marca, descripcion, categorias (nombre))
         )
       `)
       .order("fecha", { ascending: false });
@@ -307,6 +307,7 @@ export async function createPurchase(data: {
         cantidad: d.cantidad,
         precio_unitario: d.precio_compra,
         subtotal: d.subtotal,
+        numero_lote: d.numero_lote || `L-${id_compra}-${i + 1}`,
       });
 
       lotesToInsert.push({

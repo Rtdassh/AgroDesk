@@ -41,10 +41,10 @@ export function InventarioClient({ initialProducts }: { initialProducts: any[] }
 
   const handleOpenCreate = () => { setEditingProduct(null); setIsModalOpen(true) }
   const handleOpenEdit = (product: any) => { setEditingProduct(product); setIsModalOpen(true) }
-  const handleOpenLotes = (product: any) => { 
-    setSelectedProductLotes(product); 
-    setLotes(product.lotes || []); 
-    setIsLotesModalOpen(true); 
+  const handleOpenLotes = (product: any) => {
+    setSelectedProductLotes(product);
+    setLotes(product.lotes || []);
+    setIsLotesModalOpen(true);
   }
 
   const handleDelete = async (id: number) => {
@@ -94,29 +94,45 @@ export function InventarioClient({ initialProducts }: { initialProducts: any[] }
   const columns: Column<any>[] = [
     { key: "no", header: "No.", render: (r) => r.no },
     { key: "code", header: "Codigo", render: (r) => <span className="font-medium">{r.code}</span> },
-    { key: "name", header: "Producto", render: (r) => (
-      <div>
-        <p className="font-semibold">{r.name}</p>
-        <p className="text-xs text-muted-foreground">{r.desc}</p>
-      </div>
-    )},
+    {
+      key: "name", header: "Producto", render: (r) => (
+        <div>
+          <p className="font-semibold">{r.name}</p>
+          <p className="text-xs text-muted-foreground">{r.desc}</p>
+          {r.lotes && r.lotes.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {r.lotes.map((l: any, idx: number) => (
+                <span key={idx} className="text-[10px] bg-muted/50 px-1.5 py-0.5 rounded text-muted-foreground border">
+                  Lote: {l.numero_lote || "S/N"}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    },
     { key: "supplier", header: "Proveedor", render: (r) => <span className="text-muted-foreground">{r.supplier}</span> },
     { key: "invoice", header: "No. Factura", render: (r) => r.invoice },
     { key: "qty", header: "Cantidad", render: (r) => r.qty },
     { key: "price", header: "Precio Compra (Q)", render: (r) => `Q${Number(r.price).toFixed(2)}` },
+    { key: "precio_venta", header: "Precio Venta (Q)", render: (r) => <span className="text-primary font-medium">Q{Number(r.precio_venta || 0).toFixed(2)}</span> },
     { key: "total", header: "Total (Q)", render: (r) => <span className="font-medium">Q{Number(r.total).toFixed(2)}</span> },
-    { key: "status", header: "Estado", render: (r) => (
-      <Badge variant={r.status === "Critico" ? "destructive" : r.status === "Bajo" ? "secondary" : "outline"}>{r.status}</Badge>
-    )},
-    { key: "actions", header: "", render: (r) => (
-      <RowActions
-        actions={[
-          { label: "Ver Lotes / Ajustar", icon: Package, onClick: () => handleOpenLotes(r) },
-          { label: "Editar", icon: Pencil, onClick: () => handleOpenEdit(r) }
-        ]}
-        deleteConfig={{ title: "Eliminar producto", description: "Esta accion no se puede deshacer. El producto sera eliminado permanentemente.", onConfirm: () => handleDelete(r.no) }}
-      />
-    )},
+    {
+      key: "status", header: "Estado", render: (r) => (
+        <Badge variant={r.status === "Critico" ? "destructive" : r.status === "Bajo" ? "secondary" : "outline"}>{r.status}</Badge>
+      )
+    },
+    {
+      key: "actions", header: "", render: (r) => (
+        <RowActions
+          actions={[
+            { label: "Ver Lotes / Ajustar", icon: Package, onClick: () => handleOpenLotes(r) },
+            { label: "Editar", icon: Pencil, onClick: () => handleOpenEdit(r) }
+          ]}
+          deleteConfig={{ title: "Eliminar producto", description: "Esta accion no se puede deshacer. El producto sera eliminado permanentemente.", onConfirm: () => handleDelete(r.no) }}
+        />
+      )
+    },
   ]
 
   return (
@@ -221,8 +237,8 @@ export function InventarioClient({ initialProducts }: { initialProducts: any[] }
                         <td className="px-4 py-3">{lote.numero_lote}</td>
                         <td className="px-4 py-3">{lote.fecha_vencimiento || "N/A"}</td>
                         <td className="px-4 py-3">
-                          <Input 
-                            type="number" 
+                          <Input
+                            type="number"
                             className="w-24"
                             defaultValue={lote.stock_actual}
                             onBlur={(e) => {

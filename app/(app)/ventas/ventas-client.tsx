@@ -28,25 +28,27 @@ import { exportCSV } from "@/lib/export-csv"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
-export function VentasClient({ initialSales, initialClientes, initialProductos }: { initialSales: any[]; initialClientes: any[]; initialProductos: any[] }) {
+export function VentasClient({ initialSales, initialClientes, initialProductos, isCajaAbierta }: { initialSales: any[]; initialClientes: any[]; initialProductos: any[]; isCajaAbierta: boolean }) {
   const router = useRouter()
   const [search, setSearch] = useState("")
+  const [dateFilter, setDateFilter] = useState("")
   const sales = initialSales
   const clientes = initialClientes
   const productos = initialProductos
 
   const [viewMode, setViewMode] = useState<"list" | "create">("list")
   const [detailSale, setDetailSale] = useState<any>(null)
-  
+
   // Create Sale State
   const [selectedClient, setSelectedClient] = useState<string>("")
   const [newClientData, setNewClientData] = useState({ nombre: "", nit: "" })
   const [cart, setCart] = useState<{ product: any; quantity: number }[]>([])
-  
+  const [discountAmount, setDiscountAmount] = useState<number | "">("")
+
   const [productSearch, setProductSearch] = useState("")
   const [selectedProduct, setSelectedProduct] = useState<any>(null)
   const [selectedQuantity, setSelectedQuantity] = useState<number | "">(1)
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
 
@@ -59,28 +61,37 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
   const totalMonth = monthSales.reduce((sum: number, s: any) => sum + s.total, 0)
   const uniqueClientsMonth = new Set(monthSales.map((s: any) => s.client)).size
 
-  const filteredSales = sales.filter((s: any) =>
-    s.client.toLowerCase().includes(search.toLowerCase()) ||
-    s.id.toLowerCase().includes(search.toLowerCase()) ||
-    s.nit.toLowerCase().includes(search.toLowerCase())
-  )
+  const filteredSales = sales.filter((s: any) => {
+    const matchesSearch = s.client.toLowerCase().includes(search.toLowerCase()) ||
+      s.id.toLowerCase().includes(search.toLowerCase()) ||
+      s.nit.toLowerCase().includes(search.toLowerCase());
 
-  const handleOpenCreate = () => { 
-    setSelectedClient(""); 
+    const matchesDate = dateFilter ? s.date.includes(dateFilter) : true;
+
+    return matchesSearch && matchesDate;
+  })
+
+  const handleOpenCreate = () => {
+    if (!isCajaAbierta) {
+      toast.error("Debe abrir caja desde Finanzas antes de operar.");
+      return;
+    }
+    setSelectedClient("");
     setNewClientData({ nombre: "", nit: "" });
-    setCart([]); 
-    setSelectedProduct(null); 
+    setCart([]);
+    setSelectedProduct(null);
     setProductSearch("");
-    setSelectedQuantity(1); 
-    setViewMode("create"); 
+    setSelectedQuantity(1);
+    setDiscountAmount("");
+    setViewMode("create");
   }
 
   const searchedProducts = productSearch.trim().length >= 2
-    ? productos.filter((p: any) => 
-        p.nombre?.toLowerCase().includes(productSearch.toLowerCase()) || 
-        p.codigo?.toLowerCase().includes(productSearch.toLowerCase()) || 
-        p.descripcion?.toLowerCase().includes(productSearch.toLowerCase())
-      )
+    ? productos.filter((p: any) =>
+      p.nombre?.toLowerCase().includes(productSearch.toLowerCase()) ||
+      p.codigo?.toLowerCase().includes(productSearch.toLowerCase()) ||
+      p.descripcion?.toLowerCase().includes(productSearch.toLowerCase())
+    )
     : []
 
   const addToCart = () => {
@@ -88,7 +99,7 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
     const qty = Number(selectedQuantity)
     if (qty <= 0) { toast.error("La cantidad debe ser mayor a 0"); return }
     if (qty > selectedProduct.stock_disponible) { toast.error(`No hay suficiente stock. Disponible: ${selectedProduct.stock_disponible}`); return }
-    
+
     const existing = cart.find((item) => item.product.id_producto === selectedProduct.id_producto)
     if (existing) {
       const newQ = existing.quantity + qty
@@ -104,6 +115,10 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
 
   const removeFromCart = (productId: number) => setCart(cart.filter((item) => item.product.id_producto !== productId))
   const cartTotal = cart.reduce((sum, item) => sum + item.product.precio_venta * item.quantity, 0)
+  const finalTotal = Math.max(0, cartTotal - (Number(discountAmount) || 0));
+
+  const selectedClientData = clientes.find((c: any) => c.id_cliente.toString() === selectedClient);
+  const isWholesale = selectedClientData?.tipo_cliente === "Mayorista";
 
   const handleSubmit = async () => {
     setConfirmOpen(false)
@@ -118,12 +133,13 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
       const result = await createSale({
         id_cliente: selectedClient === "NEW" ? undefined : parseInt(selectedClient),
         nuevo_cliente: selectedClient === "NEW" ? newClientData : undefined,
-        total: cartTotal,
+        total: finalTotal,
+        descuento: Number(discountAmount) || 0,
         detalles: cart.map((item) => ({ id_producto: item.product.id_producto, cantidad: item.quantity, precio_unitario: item.product.precio_venta, subtotal: item.quantity * item.product.precio_venta })),
       })
-      if (result.success) { 
-        toast.success("Venta registrada exitosamente"); 
-        setViewMode("list"); 
+      if (result.success) {
+        toast.success("Venta registrada exitosamente");
+        setViewMode("list");
         router.refresh();
       }
       else toast.error(result.error || "Error al registrar venta")
@@ -157,12 +173,14 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
     { key: "total", header: "Total (Q)", render: (r) => <span className="font-medium">Q{r.total.toLocaleString("en", { minimumFractionDigits: 2 })}</span> },
     { key: "payment", header: "Pago", render: (r) => <Badge variant={r.payment === "Credito" ? "secondary" : "outline"}>{r.payment}</Badge> },
     { key: "status", header: "Estado", render: (r) => <Badge variant={r.status === "Anulada" ? "destructive" : r.status === "Pendiente" ? "secondary" : "outline"}>{r.status}</Badge> },
-    { key: "actions", header: "", render: (r) => (
-      <RowActions actions={[
-        { label: "Ver detalle", icon: Eye, onClick: () => setDetailSale(r) },
-        { label: "Imprimir", icon: Printer, onClick: () => handlePrint(r) },
-      ]} />
-    )},
+    {
+      key: "actions", header: "", render: (r) => (
+        <RowActions actions={[
+          { label: "Ver detalle", icon: Eye, onClick: () => setDetailSale(r) },
+          { label: "Imprimir", icon: Printer, onClick: () => handlePrint(r) },
+        ]} />
+      )
+    },
   ]
 
   if (viewMode === "create") {
@@ -177,7 +195,7 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          
+
           {/* Lado Izquierdo: Buscador y Selección de Producto */}
           <div className="lg:col-span-7 xl:col-span-8 space-y-6">
             <Card className="border-t-4 border-t-primary shadow-md">
@@ -188,9 +206,9 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
               <CardContent className="p-6">
                 <div className="relative mb-4">
                   <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                  <Input 
-                    className="h-14 pl-10 text-lg bg-background border-2 shadow-sm rounded-xl focus-visible:ring-primary" 
-                    placeholder="Buscar producto por nombre, código o descripción..." 
+                  <Input
+                    className="h-14 pl-10 text-lg bg-background border-2 shadow-sm rounded-xl focus-visible:ring-primary"
+                    placeholder="Buscar producto por nombre, código o descripción..."
                     value={productSearch}
                     onChange={(e) => setProductSearch(e.target.value)}
                   />
@@ -199,15 +217,14 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
                 {searchedProducts.length > 0 && !selectedProduct && (
                   <div className="border rounded-xl max-h-64 overflow-y-auto bg-background p-2 space-y-2 shadow-inner">
                     {searchedProducts.map((p: any) => (
-                      <button 
+                      <button
                         key={p.id_producto}
                         onClick={() => setSelectedProduct(p)}
                         disabled={p.stock_disponible <= 0}
-                        className={`w-full text-left p-3 rounded-lg border transition-all ${
-                          p.stock_disponible <= 0 
-                            ? 'opacity-50 bg-destructive/5 border-destructive/20 cursor-not-allowed' 
+                        className={`w-full text-left p-3 rounded-lg border transition-all ${p.stock_disponible <= 0
+                            ? 'opacity-50 bg-destructive/5 border-destructive/20 cursor-not-allowed'
                             : 'hover:bg-primary/5 hover:border-primary/30 active:scale-[0.99]'
-                        }`}
+                          }`}
                       >
                         <div className="flex justify-between items-start">
                           <div>
@@ -244,10 +261,10 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
                     <div className="flex items-end gap-4">
                       <div className="space-y-2 flex-1">
                         <Label className="font-bold">Cantidad a Vender</Label>
-                        <Input 
-                          type="number" 
-                          min="1" 
-                          className="h-12 text-lg font-bold" 
+                        <Input
+                          type="number"
+                          min="1"
+                          className="h-12 text-lg font-bold"
                           value={selectedQuantity}
                           onFocus={(e) => e.target.select()}
                           onChange={(e) => {
@@ -262,9 +279,9 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
                           Q{selectedProduct.precio_venta.toFixed(2)}
                         </div>
                       </div>
-                      <Button 
-                        onClick={addToCart} 
-                        size="lg" 
+                      <Button
+                        onClick={addToCart}
+                        size="lg"
                         className="h-12 px-8 text-base font-bold shadow-md"
                         disabled={selectedQuantity === "" || Number(selectedQuantity) <= 0 || Number(selectedQuantity) > selectedProduct.stock_disponible}
                       >
@@ -299,23 +316,23 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
                       ))}
                     </SelectContent>
                   </Select>
-                  
+
                   {selectedClient === "NEW" && (
                     <div className="grid grid-cols-2 gap-3 mt-3 animate-in fade-in zoom-in-95 p-3 bg-muted/30 rounded-lg border">
                       <div className="space-y-1">
                         <Label className="text-xs">Nombre completo *</Label>
-                        <Input 
-                          placeholder="Juan Pérez" 
-                          value={newClientData.nombre} 
-                          onChange={(e) => setNewClientData({...newClientData, nombre: e.target.value})} 
+                        <Input
+                          placeholder="Juan Pérez"
+                          value={newClientData.nombre}
+                          onChange={(e) => setNewClientData({ ...newClientData, nombre: e.target.value })}
                         />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs">NIT</Label>
-                        <Input 
-                          placeholder="Opcional (Ej. C/F)" 
-                          value={newClientData.nit} 
-                          onChange={(e) => setNewClientData({...newClientData, nit: e.target.value})} 
+                        <Input
+                          placeholder="Opcional (Ej. C/F)"
+                          value={newClientData.nit}
+                          onChange={(e) => setNewClientData({ ...newClientData, nit: e.target.value })}
                         />
                       </div>
                     </div>
@@ -348,15 +365,43 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
                     </div>
                   )}
                 </div>
-                
+
                 <div className="bg-primary/5 p-5 border-t">
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="text-lg font-bold text-muted-foreground">TOTAL:</span>
-                    <span className="text-3xl font-black text-primary">Q{cartTotal.toFixed(2)}</span>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-bold text-muted-foreground">SUBTOTAL:</span>
+                    <span className="text-lg font-bold">Q{cartTotal.toFixed(2)}</span>
                   </div>
-                  <Button 
-                    onClick={() => setConfirmOpen(true)} 
-                    disabled={isSubmitting || cart.length === 0 || !selectedClient} 
+
+                  {isWholesale && (
+                    <div className="flex justify-between items-center mb-4 pt-2 border-t">
+                      <span className="text-sm font-bold text-muted-foreground flex items-center">
+                        <Badge variant="secondary" className="mr-2 bg-amber-100 text-amber-800 border-amber-200">Mayorista</Badge>
+                        Descuento:
+                      </span>
+                      <div className="relative w-32">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">Q</span>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="h-9 pl-8 font-bold text-right text-destructive"
+                          value={discountAmount}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setDiscountAmount(val === "" ? "" : parseFloat(val));
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center mb-4 pt-2 border-t">
+                    <span className="text-lg font-bold text-muted-foreground">TOTAL:</span>
+                    <span className="text-3xl font-black text-primary">Q{finalTotal.toFixed(2)}</span>
+                  </div>
+                  <Button
+                    onClick={() => setConfirmOpen(true)}
+                    disabled={isSubmitting || cart.length === 0 || !selectedClient}
                     className="w-full h-14 text-lg font-bold shadow-lg"
                   >
                     Confirmar Venta
@@ -373,7 +418,8 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
             <AlertDialogHeader>
               <AlertDialogTitle>¿Confirmar Registro de Venta?</AlertDialogTitle>
               <AlertDialogDescription>
-                Está a punto de registrar la venta por un total de <strong>Q{cartTotal.toFixed(2)}</strong> para el cliente seleccionado.
+                Está a punto de registrar la venta por un total de <strong>Q{finalTotal.toFixed(2)}</strong> para el cliente seleccionado.
+                {Number(discountAmount) > 0 && <span> Se aplicará un descuento de <strong>Q{Number(discountAmount).toFixed(2)}</strong>.</span>}
                 Esto rebajará inmediatamente el stock del inventario.
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -392,7 +438,19 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
 
   return (
     <>
-      <PageHeader icon={ShoppingCart} title="Gestion de Ventas" />
+      <PageHeader icon={ShoppingCart} title="Gestión de Ventas" />
+
+      {!isCajaAbierta && (
+        <div className="bg-destructive/15 text-destructive p-4 rounded-lg border border-destructive/30 flex items-center mb-6">
+          <div className="mr-3 p-2 bg-destructive/20 rounded-full">
+            <DollarSign className="h-6 w-6" />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg">La caja está cerrada</h3>
+            <p className="text-sm opacity-90">Debe abrir la caja desde el módulo de Finanzas antes de poder registrar nuevas ventas.</p>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Ventas del Dia" value={`Q${totalToday.toLocaleString("en", { minimumFractionDigits: 2 })}`} icon={ShoppingCart} subtitle={`${todaySales.length} ventas realizadas`} />
@@ -408,14 +466,22 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
           <CardAction>
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" onClick={handleExport}><FileDown className="mr-2 h-4 w-4" />Exportar</Button>
-              <Button size="sm" onClick={handleOpenCreate}><Plus className="mr-2 h-4 w-4" />Nueva Venta</Button>
+              <Button size="sm" onClick={handleOpenCreate} className={!isCajaAbierta ? "opacity-50 cursor-not-allowed" : ""}><Plus className="mr-2 h-4 w-4" />Nueva Venta</Button>
             </div>
           </CardAction>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Buscar por cliente, NIT, No. venta..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <div className="mb-4 flex flex-col sm:flex-row gap-3">
+            <div className="relative max-w-sm flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Buscar por cliente, NIT, No. venta..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+            <div className="relative w-full sm:w-auto">
+              <Input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-full sm:w-[200px]" />
+              {dateFilter && (
+                <button onClick={() => setDateFilter("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs font-medium">Limpiar</button>
+              )}
+            </div>
           </div>
           <DataTable columns={columns} data={filteredSales} rowKey={(r) => r.id} emptyIcon={ShoppingCart} emptyMessage="No se encontraron ventas." />
         </CardContent>
@@ -423,20 +489,38 @@ export function VentasClient({ initialSales, initialClientes, initialProductos }
 
       {/* Detalle de venta */}
       <Dialog open={detailSale !== null} onOpenChange={(open) => { if (!open) setDetailSale(null) }}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Detalle de Venta {detailSale?.id}</DialogTitle></DialogHeader>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader><DialogTitle className="text-xl">Detalle de Venta {detailSale?.id}</DialogTitle></DialogHeader>
           {detailSale && (
-            <div className="space-y-3 text-sm">
-              <div className="grid grid-cols-2 gap-2">
-                <div><span className="text-muted-foreground">Fecha:</span> {detailSale.date}</div>
-                <div><span className="text-muted-foreground">Cliente:</span> {detailSale.client}</div>
-                <div><span className="text-muted-foreground">NIT:</span> {detailSale.nit}</div>
-                <div><span className="text-muted-foreground">Pago:</span> {detailSale.payment}</div>
-                <div><span className="text-muted-foreground">Items:</span> {detailSale.items}</div>
-                <div><span className="text-muted-foreground">Estado:</span> {detailSale.status}</div>
+            <div className="space-y-6 text-sm">
+              <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-lg">
+                <div><span className="text-muted-foreground block text-xs mb-1">Fecha</span> <span className="font-medium">{detailSale.date}</span></div>
+                <div><span className="text-muted-foreground block text-xs mb-1">Cliente</span> <span className="font-medium">{detailSale.client}</span></div>
+                <div><span className="text-muted-foreground block text-xs mb-1">NIT</span> <span className="font-medium">{detailSale.nit}</span></div>
+                <div><span className="text-muted-foreground block text-xs mb-1">Pago</span> <span className="font-medium">{detailSale.payment}</span></div>
+                <div><span className="text-muted-foreground block text-xs mb-1">Total de Items</span> <span className="font-medium">{detailSale.items}</span></div>
+                <div><span className="text-muted-foreground block text-xs mb-1">Estado</span> <span className="font-medium">{detailSale.status}</span></div>
               </div>
-              <div className="border-t pt-3">
-                <p className="text-right text-lg font-bold">Total: Q{detailSale.total.toLocaleString("en", { minimumFractionDigits: 2 })}</p>
+
+              <div className="rounded-lg border bg-card overflow-hidden">
+                <div className="p-4 space-y-3">
+                  <div className="flex justify-between text-base">
+                    <span className="text-muted-foreground font-medium">Subtotal</span>
+                    <span className="font-bold">Q{(detailSale.total + (detailSale.discount || 0)).toLocaleString("en", { minimumFractionDigits: 2 })}</span>
+                  </div>
+
+                  {detailSale.discount > 0 && (
+                    <div className="flex justify-between text-base text-destructive bg-destructive/5 p-2 rounded-md -mx-2">
+                      <span className="font-medium">Descuento Aplicado</span>
+                      <span className="font-bold">- Q{detailSale.discount.toLocaleString("en", { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-primary/5 p-4 flex justify-between items-center border-t">
+                  <span className="text-lg font-black text-primary">Total Final</span>
+                  <span className="text-2xl font-black text-primary">Q{detailSale.total.toLocaleString("en", { minimumFractionDigits: 2 })}</span>
+                </div>
               </div>
             </div>
           )}
